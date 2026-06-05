@@ -272,6 +272,33 @@
       overflow-wrap: anywhere;
     }
 
+    .dispatch-controls {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(120px, 180px) auto 1fr;
+      gap: 8px;
+      align-items: center;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      margin-top: 2px;
+    }
+
+    .number-input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fbfcf8;
+      border-radius: 6px;
+      min-height: 36px;
+      padding: 7px 9px;
+      color: var(--ink);
+    }
+
+    .inline-note {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
     .empty, .error {
       padding: 16px;
       color: var(--muted);
@@ -285,6 +312,7 @@
       .metric { grid-column: span 6; }
       .panel { grid-column: span 12; }
       .preview { grid-template-columns: repeat(2, 1fr); }
+      .dispatch-controls { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 560px) {
@@ -365,6 +393,7 @@
     const $ = (id) => document.getElementById(id);
     const fmt = (n, d = 1) => Number.isFinite(Number(n)) ? Number(n).toFixed(d) : "--";
     const site = () => $("site").value.trim() || "home-lab";
+    let lastPreview = null;
     const esc = (v) => String(v ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
@@ -439,13 +468,19 @@
     }
 
     function renderPreview(preview) {
+      lastPreview = preview;
       const cmd = preview.candidate_command;
       $("dispatch-state").textContent = preview.safe_to_apply ? "ready" : "preview only";
       $("preview").innerHTML = `
         <div class="preview-item">Tracking Error<b>${fmt(preview.tracking_error_w)} W</b></div>
         <div class="preview-item">Plan Action<b>${esc(preview.current_slot?.battery_action || "--")}</b></div>
         <div class="preview-item">Target Power<b>${fmt(preview.current_slot?.battery_power_w)} W</b></div>
-        <div class="preview-item">Candidate<b>${cmd ? `${esc(preview.candidate_device_id)} / ${esc(cmd.action)}` : "none"}</b></div>`;
+        <div class="preview-item">Candidate<b>${cmd ? `${esc(preview.candidate_device_id)} / ${esc(cmd.action)}` : "none"}</b></div>
+        <div class="dispatch-controls">
+          <input id="tracking-limit" class="number-input" type="number" min="0" step="5" value="100" aria-label="max tracking error watt">
+          <button id="apply-dispatch" class="btn" type="button" ${cmd ? "" : "disabled"}>确认下发计划命令</button>
+          <span class="inline-note">${esc(preview.reason || "service will recompute preview before applying")}</span>
+        </div>`;
     }
 
     function renderCommands(rows) {
@@ -488,6 +523,36 @@
         throw new Error(`command ${res.status}: ${text}`);
       }
       return res.json();
+    }
+
+    async function applyDispatch() {
+      const btn = $("apply-dispatch");
+      if (!btn || !lastPreview?.candidate_command) return;
+      const limit = Number($("tracking-limit")?.value || 0);
+      if (!Number.isFinite(limit) || limit < 0) {
+        $("health-text").innerHTML = `<span class="error">max tracking error must be non-negative</span>`;
+        return;
+      }
+      const candidate = `${lastPreview.candidate_device_id} / ${lastPreview.candidate_command.action}`;
+      if (!window.confirm(`确认按当前计划下发 ${candidate}？服务端会重新计算候选命令。`)) {
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/v1/sites/${encodeURIComponent(site())}/dispatch/apply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ confirm: true, max_abs_tracking_error_w: limit }),
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.reason || payload.error || `dispatch apply ${res.status}`);
+        await refresh();
+      } catch (err) {
+        $("health-dot").classList.remove("ok");
+        $("health-text").innerHTML = `<span class="error">${esc(err.message)}</span>`;
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     async function handleDeviceCommand(event) {
@@ -546,6 +611,9 @@
     $("refresh").addEventListener("click", refresh);
     $("site").addEventListener("change", refresh);
     $("devices").addEventListener("click", handleDeviceCommand);
+    $("preview").addEventListener("click", (event) => {
+      if (event.target.closest("#apply-dispatch")) applyDispatch();
+    });
     refresh();
     setInterval(refresh, 5000);
   </script>
