@@ -35,7 +35,7 @@ func TestSchedulerChargesBatteryOnPVSurplus(t *testing.T) {
 	if len(fake.commands) != 1 {
 		t.Fatalf("expected 1 command, got %d", len(fake.commands))
 	}
-	if fake.commands[0].Action != "set_mode" || fake.commands[0].Params["mode"] != "charge" {
+	if fake.commands[0].Action != "set_mode" || fake.commands[0].Params["mode"] != "charging" {
 		t.Fatalf("unexpected command: %+v", fake.commands[0])
 	}
 }

@@ -71,7 +71,7 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		for _, b := range batteries {
 			soc := telemetry[b.ID].Metrics["soc"]
 			if soc < s.policy.BatteryMaxSOC {
-				s.publish(ctx, b, "set_mode", "pv surplus: charge battery", map[string]interface{}{"mode": "charge"})
+				s.publish(ctx, b, "set_mode", "pv surplus: charge battery", map[string]interface{}{"mode": "charging"})
 			}
 		}
 		return
@@ -81,7 +81,7 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		for _, b := range batteries {
 			soc := telemetry[b.ID].Metrics["soc"]
 			if soc > s.policy.BatteryMinSOC {
-				s.publish(ctx, b, "set_mode", "load deficit: discharge battery", map[string]interface{}{"mode": "discharge"})
+				s.publish(ctx, b, "set_mode", "load deficit: discharge battery", map[string]interface{}{"mode": "discharging"})
 				return
 			}
 		}
