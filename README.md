@@ -61,6 +61,12 @@ curl http://localhost:8081/metrics
 
 `/api/v1/cache/stats` 会返回 `pending`、`total` 和可选的 `oldest_pending_at`；`/metrics` 会暴露待发送消息数、总缓存数、最老待发送消息年龄和 MQTT 连接状态。
 
+也可以直接运行：
+
+```bash
+make smoke-edge
+```
+
 如果只想本机调试 Go 服务：
 
 ```bash
