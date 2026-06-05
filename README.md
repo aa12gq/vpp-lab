@@ -100,6 +100,7 @@ curl http://localhost:8080/api/v1/sites/home-lab/plan
 curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 curl http://localhost:8080/api/v1/commands
 curl http://localhost:8080/api/v1/events
+curl http://localhost:8080/api/v1/audit-logs
 ```
 
 `/healthz` 会检查 MQTT、PostgreSQL 和状态缓存；任一依赖异常时返回 HTTP 503。
@@ -109,6 +110,8 @@ curl http://localhost:8080/api/v1/events
 `/api/v1/commands` 返回最近 200 条命令记录。命令下发和设备回执会写入 PostgreSQL，服务重启后仍可查询。
 
 `/api/v1/events` 返回最近 200 条设备事件。simulator 会在电池 SOC 低于 20% 时发布 `warning low_soc` 事件，恢复到 30% 以上时发布 `info soc_recovered`。
+
+`/api/v1/audit-logs` 返回最近 200 条控制操作审计记录。当前覆盖设备注册、策略修改、手动命令和调度确认下发；会记录 actor、method、path、状态码和客户端 IP，不记录 token 或请求体。可用 `X-VPP-Actor` 标记操作者。
 
 `/metrics` 使用 Prometheus 文本格式输出站点功率、设备在线状态、设备最新遥测和命令状态计数。
 

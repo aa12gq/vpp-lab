@@ -78,6 +78,20 @@ CREATE TABLE IF NOT EXISTS device_events (
 CREATE INDEX IF NOT EXISTS idx_device_events_created_at ON device_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_device_events_device_id ON device_events (device_id);
 CREATE INDEX IF NOT EXISTS idx_device_events_severity ON device_events (severity);
+CREATE TABLE IF NOT EXISTS audit_logs (
+	id TEXT PRIMARY KEY,
+	occurred_at TIMESTAMPTZ NOT NULL,
+	actor TEXT NOT NULL,
+	action TEXT NOT NULL,
+	method TEXT NOT NULL,
+	path TEXT NOT NULL,
+	status_code INTEGER NOT NULL,
+	client_ip TEXT NOT NULL,
+	user_agent TEXT NOT NULL DEFAULT '',
+	details JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_occurred_at ON audit_logs (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action);
 `)
 	return err
 }

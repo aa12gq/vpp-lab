@@ -37,6 +37,10 @@ echo "checking device events"
 events="$(curl -fsS "$API_BASE/api/v1/events")" || fail "events request failed"
 printf '%s' "$events" | grep -q '^\[' || fail "events response is not a JSON array: $events"
 
+echo "checking audit logs"
+audit_logs="$(curl -fsS "$API_BASE/api/v1/audit-logs")" || fail "audit logs request failed"
+printf '%s' "$audit_logs" | grep -q '^\[' || fail "audit logs response is not a JSON array: $audit_logs"
+
 echo "checking prometheus online devices"
 prom="$(curl -fsS "$PROM_BASE/api/v1/query?query=sum%28vpp_device_online%29")" || fail "prometheus request failed"
 echo "$prom" | grep -q '"status":"success"' || fail "prometheus query failed: $prom"

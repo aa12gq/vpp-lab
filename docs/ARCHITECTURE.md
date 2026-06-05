@@ -122,6 +122,7 @@ API / scheduler / dispatch apply
 - `/api/v1/sites/{site_id}/device-states` 输出设备元信息、最新遥测、在线状态和 stale 秒数
 - `/api/v1/events` 输出最近设备事件，MQTT `event` topic 会落内存和 PostgreSQL
 - 可通过 `CONTROL_TOKEN` 保护控制类 API，命令/策略/调度下发需带 `X-VPP-Control-Token`
+- `/api/v1/audit-logs` 输出最近控制操作审计，覆盖设备注册、策略修改、手动命令和调度确认下发
 - `internal/state` 支持可选 Redis 后端，缓存每台设备最新遥测，服务重启后恢复实时 summary
 
 ## 阶段 5 扩展点

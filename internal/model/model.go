@@ -69,6 +69,19 @@ type DeviceEvent struct {
 	CreatedAt  time.Time              `json:"created_at"`
 }
 
+type AuditLog struct {
+	ID         string                 `json:"id"`
+	OccurredAt time.Time              `json:"occurred_at"`
+	Actor      string                 `json:"actor"`
+	Action     string                 `json:"action"`
+	Method     string                 `json:"method"`
+	Path       string                 `json:"path"`
+	StatusCode int                    `json:"status_code"`
+	ClientIP   string                 `json:"client_ip"`
+	UserAgent  string                 `json:"user_agent,omitempty"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+}
+
 type SiteSummary struct {
 	SiteID       string    `json:"site_id"`
 	PVPowerW     float64   `json:"pv_power_w"`

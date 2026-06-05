@@ -4,6 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -24,6 +27,11 @@ type DeviceSaver interface {
 	Upsert(rctx context.Context, d model.Device) error
 }
 
+type AuditRecorder interface {
+	PutAuditLog(ctx context.Context, log model.AuditLog) error
+	ListAuditLogs(ctx context.Context, limit int) ([]model.AuditLog, error)
+}
+
 type HealthCheck struct {
 	Name  string
 	Check func(context.Context) error
@@ -38,6 +46,7 @@ type Server struct {
 	scheduler *scheduler.Scheduler
 	publisher CommandPublisher
 	devices   DeviceSaver
+	audit     AuditRecorder
 	checks    []HealthCheck
 	token     string
 }
@@ -48,6 +57,11 @@ func New(siteID string, store *state.Store, sch *scheduler.Scheduler, publisher 
 
 func (s *Server) WithControlToken(token string) *Server {
 	s.token = strings.TrimSpace(token)
+	return s
+}
+
+func (s *Server) WithAuditRecorder(audit AuditRecorder) *Server {
+	s.audit = audit
 	return s
 }
 
@@ -67,10 +81,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/dispatch/apply", s.applyDispatch)
 	mux.HandleFunc("GET /api/v1/commands", s.commands)
 	mux.HandleFunc("GET /api/v1/events", s.events)
+	mux.HandleFunc("GET /api/v1/audit-logs", s.auditLogs)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", s.command)
-	return withJSON(mux)
+	return withJSON(s.withAudit(mux))
 }
 
 func (s *Server) console(w http.ResponseWriter, _ *http.Request) {
@@ -254,6 +269,19 @@ func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.store.Events())
 }
 
+func (s *Server) auditLogs(w http.ResponseWriter, r *http.Request) {
+	if s.audit == nil {
+		writeJSON(w, http.StatusOK, []model.AuditLog{})
+		return
+	}
+	logs, err := s.audit.ListAuditLogs(r.Context(), 200)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}
+
 func (s *Server) getPolicy(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.scheduler.Policy())
 }
@@ -306,6 +334,87 @@ func withJSON(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) withAudit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.audit == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		action, ok := auditAction(r)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		rec := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		entry := model.AuditLog{
+			ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+			OccurredAt: time.Now(),
+			Actor:      auditActor(r),
+			Action:     action,
+			Method:     r.Method,
+			Path:       r.URL.Path,
+			StatusCode: rec.statusCode,
+			ClientIP:   clientIP(r),
+			UserAgent:  r.UserAgent(),
+			Details: map[string]interface{}{
+				"site_id":   r.PathValue("site_id"),
+				"device_id": r.PathValue("device_id"),
+			},
+		}
+		if err := s.audit.PutAuditLog(context.Background(), entry); err != nil {
+			log.Printf("write audit log failed action=%s path=%s err=%v", action, r.URL.Path, err)
+		}
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.statusCode = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func auditAction(r *http.Request) (string, bool) {
+	path := r.URL.Path
+	switch {
+	case r.Method == http.MethodPost && path == "/api/v1/devices":
+		return "device.upsert", true
+	case r.Method == http.MethodPut && path == "/api/v1/policies/default":
+		return "policy.update", true
+	case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/devices/") && strings.HasSuffix(path, "/command"):
+		return "command.issue", true
+	case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/sites/") && strings.HasSuffix(path, "/dispatch/apply"):
+		return "dispatch.apply", true
+	default:
+		return "", false
+	}
+}
+
+func auditActor(r *http.Request) string {
+	if actor := strings.TrimSpace(r.Header.Get("X-VPP-Actor")); actor != "" {
+		return actor
+	}
+	return "anonymous"
+}
+
+func clientIP(r *http.Request) string {
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+		if i := strings.IndexByte(forwarded, ','); i >= 0 {
+			return strings.TrimSpace(forwarded[:i])
+		}
+		return forwarded
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {
