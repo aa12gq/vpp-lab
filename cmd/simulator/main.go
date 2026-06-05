@@ -19,7 +19,7 @@ func main() {
 	siteID := getenv("SITE_ID", "home-lab")
 	commandTopic := "vpp/" + siteID + "/+/+/command"
 	sim := newSimulator(siteID)
-	client := paho.NewClient(paho.NewClientOptions().
+	opts := paho.NewClientOptions().
 		AddBroker(broker).
 		SetClientID("vpp-simulator").
 		SetAutoReconnect(true).
@@ -32,7 +32,11 @@ func main() {
 				return
 			}
 			log.Printf("simulator subscribed command topic: %s", commandTopic)
-		}))
+		})
+	if username := getenv("MQTT_USERNAME", ""); username != "" {
+		opts.SetUsername(username).SetPassword(getenv("MQTT_PASSWORD", ""))
+	}
+	client := paho.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Fatalf("connect mqtt: %v", token.Error())
 	}

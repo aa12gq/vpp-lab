@@ -33,6 +33,10 @@ func main() {
 	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
 	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status"))
 	upstreamTopicPrefix := strings.Trim(getenv("EDGE_UPSTREAM_TOPIC_PREFIX", ""), "/")
+	localUsername := getenv("EDGE_LOCAL_USERNAME", getenv("MQTT_USERNAME", ""))
+	localPassword := getenv("EDGE_LOCAL_PASSWORD", getenv("MQTT_PASSWORD", ""))
+	upstreamUsername := getenv("EDGE_UPSTREAM_USERNAME", getenv("MQTT_USERNAME", ""))
+	upstreamPassword := getenv("EDGE_UPSTREAM_PASSWORD", getenv("MQTT_PASSWORD", ""))
 
 	cache, err := edge.OpenCache(ctx, cachePath)
 	if err != nil {
@@ -46,7 +50,7 @@ func main() {
 		log.Printf("edge cache cleanup disabled retention=%s interval=%s", cacheRetention, cleanupInterval)
 	}
 
-	local := newMQTTClient(localBroker, getenv("EDGE_LOCAL_CLIENT_ID", "vpp-edge-gateway-local"), func(_ paho.Client, msg paho.Message) {
+	local := newMQTTClient(localBroker, getenv("EDGE_LOCAL_CLIENT_ID", "vpp-edge-gateway-local"), localUsername, localPassword, func(_ paho.Client, msg paho.Message) {
 		parsed, ok := topic.Parse(msg.Topic())
 		if !ok || !captureKinds[parsed.Kind] {
 			return
@@ -71,7 +75,7 @@ func main() {
 
 	var upstream paho.Client
 	if upstreamBroker != "" {
-		upstream = newMQTTClient(upstreamBroker, getenv("EDGE_UPSTREAM_CLIENT_ID", "vpp-edge-gateway-upstream"), nil)
+		upstream = newMQTTClient(upstreamBroker, getenv("EDGE_UPSTREAM_CLIENT_ID", "vpp-edge-gateway-upstream"), upstreamUsername, upstreamPassword, nil)
 		if err := connect(upstream); err != nil {
 			log.Fatalf("connect upstream mqtt: %v", err)
 		}
@@ -255,7 +259,7 @@ func upstreamTopic(original string, prefix string) string {
 	return prefix + "/" + strings.TrimLeft(original, "/")
 }
 
-func newMQTTClient(broker, clientID string, handler paho.MessageHandler) paho.Client {
+func newMQTTClient(broker, clientID string, username, password string, handler paho.MessageHandler) paho.Client {
 	opts := paho.NewClientOptions().
 		AddBroker(broker).
 		SetClientID(clientID).
@@ -264,6 +268,9 @@ func newMQTTClient(broker, clientID string, handler paho.MessageHandler) paho.Cl
 		SetConnectRetryInterval(2 * time.Second)
 	if handler != nil {
 		opts.SetDefaultPublishHandler(handler)
+	}
+	if username != "" {
+		opts.SetUsername(username).SetPassword(password)
 	}
 	return paho.NewClient(opts)
 }

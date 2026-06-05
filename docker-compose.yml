@@ -136,6 +136,8 @@ services:
     entrypoint: ["/app/simulator"]
     environment:
       MQTT_BROKER: tcp://emqx:1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       SITE_ID: home-lab
     restart: on-failure
     healthcheck:
@@ -159,6 +161,8 @@ services:
     environment:
       SITE_ID: home-lab
       EDGE_LOCAL_BROKER: tcp://emqx:1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       EDGE_CACHE_PATH: /data/cache.db
       EDGE_FLUSH_INTERVAL: 5s
       EDGE_CACHE_RETENTION: 24h

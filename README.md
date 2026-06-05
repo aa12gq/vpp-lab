@@ -70,6 +70,8 @@ go run ./cmd/vpp-lab
 
 说明：`.env` 默认服务地址适合本机 `go run`；`docker-compose.yml` 会为容器化 `app` 覆盖为 `emqx/influxdb/postgres/redis` 这些 Compose 服务名。
 
+平台服务、simulator 和 edge-gateway 都支持 `MQTT_USERNAME` / `MQTT_PASSWORD`。edge-gateway 还可用 `EDGE_LOCAL_USERNAME` / `EDGE_LOCAL_PASSWORD` 和 `EDGE_UPSTREAM_USERNAME` / `EDGE_UPSTREAM_PASSWORD` 分别覆盖本地 broker 与上游 broker 的凭据。
+
 Redis 是可选增强。设置 `REDIS_ADDR=localhost:6379` 后，平台会缓存每台设备的最新遥测，服务重启后可恢复实时 summary；不设置时仍使用内存状态。
 
 本机调试时可另开终端启动模拟器：
