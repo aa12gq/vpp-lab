@@ -63,6 +63,8 @@ curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 curl http://localhost:8080/api/v1/commands
 ```
 
+`/healthz` 会检查 MQTT、PostgreSQL 和状态缓存；任一依赖异常时返回 HTTP 503。
+
 `/api/v1/commands` 返回最近 200 条命令记录。命令下发和设备回执会写入 PostgreSQL，服务重启后仍可查询。
 
 `/metrics` 使用 Prometheus 文本格式输出站点功率、设备在线状态、设备最新遥测和命令状态计数。

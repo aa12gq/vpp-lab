@@ -115,6 +115,7 @@ API / scheduler / dispatch apply
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
 - Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态
+- `/healthz` 检查 MQTT、PostgreSQL 和状态缓存，依赖异常时返回 503
 - `internal/state` 支持可选 Redis 后端，缓存每台设备最新遥测，服务重启后恢复实时 summary
 
 ## 阶段 5 扩展点

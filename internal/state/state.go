@@ -66,6 +66,13 @@ func (s *Store) Close() error {
 	return s.redis.Close()
 }
 
+func (s *Store) Ping(ctx context.Context) error {
+	if s.redis == nil {
+		return nil
+	}
+	return s.redis.Ping(ctx).Err()
+}
+
 func (s *Store) UpsertDevice(d model.Device) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

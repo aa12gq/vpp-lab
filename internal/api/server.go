@@ -23,16 +23,22 @@ type DeviceSaver interface {
 	Upsert(rctx context.Context, d model.Device) error
 }
 
+type HealthCheck struct {
+	Name  string
+	Check func(context.Context) error
+}
+
 type Server struct {
 	siteID    string
 	store     *state.Store
 	scheduler *scheduler.Scheduler
 	publisher CommandPublisher
 	devices   DeviceSaver
+	checks    []HealthCheck
 }
 
-func New(siteID string, store *state.Store, sch *scheduler.Scheduler, publisher CommandPublisher, devices DeviceSaver) *Server {
-	return &Server{siteID: siteID, store: store, scheduler: sch, publisher: publisher, devices: devices}
+func New(siteID string, store *state.Store, sch *scheduler.Scheduler, publisher CommandPublisher, devices DeviceSaver, checks ...HealthCheck) *Server {
+	return &Server{siteID: siteID, store: store, scheduler: sch, publisher: publisher, devices: devices, checks: checks}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -54,8 +60,26 @@ func (s *Server) Handler() http.Handler {
 	return withJSON(mux)
 }
 
-func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	statusCode := http.StatusOK
+	status := "ok"
+	checks := make(map[string]string, len(s.checks))
+	for _, check := range s.checks {
+		if check.Name == "" || check.Check == nil {
+			continue
+		}
+		if err := check.Check(ctx); err != nil {
+			statusCode = http.StatusServiceUnavailable
+			status = "degraded"
+			checks[check.Name] = err.Error()
+			continue
+		}
+		checks[check.Name] = "ok"
+	}
+	writeJSON(w, statusCode, map[string]interface{}{"status": status, "checks": checks})
 }
 
 func (s *Server) metrics(w http.ResponseWriter, _ *http.Request) {

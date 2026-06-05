@@ -64,7 +64,7 @@ func main() {
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(cfg.SiteID, store, sch, mqttClient, devRepo).Handler(),
+		Handler:           api.New(cfg.SiteID, store, sch, mqttClient, devRepo, healthChecks(store, mqttClient, devRepo)...).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -94,6 +94,19 @@ func newStateStore(ctx context.Context, cfg config.Config) (*state.Store, error)
 	}
 	log.Printf("redis state store enabled addr=%s db=%d", cfg.RedisAddr, cfg.RedisDB)
 	return store, nil
+}
+
+func healthChecks(store *state.Store, mqttClient *vppmqtt.Client, devRepo *repository.DeviceRepository) []api.HealthCheck {
+	return []api.HealthCheck{
+		{
+			Name: "mqtt",
+			Check: func(context.Context) error {
+				return mqttClient.Healthy()
+			},
+		},
+		{Name: "postgres", Check: devRepo.Ping},
+		{Name: "state", Check: store.Ping},
+	}
 }
 
 func loadRecentCommands(ctx context.Context, repo *repository.DeviceRepository, store *state.Store) error {
