@@ -148,3 +148,22 @@ services:
         condition: service_healthy
       app:
         condition: service_healthy
+
+  edge-gateway:
+    profiles:
+      - edge
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    entrypoint: ["/app/edge-gateway"]
+    environment:
+      SITE_ID: home-lab
+      EDGE_LOCAL_BROKER: tcp://emqx:1883
+      EDGE_CACHE_PATH: /data/cache.db
+      EDGE_FLUSH_INTERVAL: 5s
+    volumes:
+      - ./data/edge-gateway:/data
+    restart: on-failure
+    depends_on:
+      emqx:
+        condition: service_healthy

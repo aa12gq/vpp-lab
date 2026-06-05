@@ -4,5 +4,6 @@ data/
 dist/
 /vpp-lab
 /simulator
+/edge-gateway
 *.log
 .DS_Store

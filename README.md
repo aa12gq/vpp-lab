@@ -45,6 +45,14 @@ http://localhost:8080/
 
 控制鉴权默认关闭。设置 `CONTROL_TOKEN` 后，设备注册、策略修改、命令下发和调度确认下发必须带 `X-VPP-Control-Token`；内置控制台可在右上角输入 token，浏览器会保存到本地。
 
+边缘网关实验服务默认不启动。需要验证边缘缓存时：
+
+```bash
+make docker-edge
+```
+
+它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT。
+
 如果只想本机调试 Go 服务：
 
 ```bash
@@ -235,8 +243,10 @@ curl -X PUT http://localhost:8080/api/v1/policies/default \
 ```text
 cmd/vpp-lab             平台服务
 cmd/simulator           无硬件模拟器
+cmd/edge-gateway        边缘网关缓存/转发雏形
 firmware/esp32-node     ESP32 固件模板
 internal/api            HTTP API
+internal/edge           边缘 SQLite 缓存
 internal/mqtt           MQTT 接入
 internal/scheduler      实时规则调度
 internal/optimizer      简单 24h 计划

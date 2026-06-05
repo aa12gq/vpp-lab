@@ -1,4 +1,4 @@
-.PHONY: run test tidy smoke docker-up docker-down
+.PHONY: run test tidy smoke docker-up docker-edge docker-down
 
 run:
 	go run ./cmd/vpp-lab
@@ -14,6 +14,9 @@ smoke:
 
 docker-up:
 	docker compose up -d
+
+docker-edge:
+	docker compose --profile edge up -d edge-gateway
 
 docker-down:
 	docker compose down
