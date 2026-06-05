@@ -271,6 +271,8 @@ curl -X PUT http://localhost:8080/api/v1/policies/default \
 
 ## 目录
 
+硬件采购和低压接线方案见 [docs/HARDWARE.md](docs/HARDWARE.md)。
+
 ```text
 cmd/vpp-lab             平台服务
 cmd/simulator           无硬件模拟器
