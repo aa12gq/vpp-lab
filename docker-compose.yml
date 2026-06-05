@@ -1,0 +1,65 @@
+services:
+  emqx:
+    image: emqx/emqx:5.8
+    ports:
+      - "1883:1883"
+      - "18083:18083"
+    environment:
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: public
+
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: vpp-lab-pass
+      DOCKER_INFLUXDB_INIT_ORG: vpp-lab
+      DOCKER_INFLUXDB_INIT_BUCKET: vpp
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: vpp-lab-token
+    volumes:
+      - ./data/influxdb:/var/lib/influxdb2
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: vpp
+      POSTGRES_PASSWORD: vpp
+      POSTGRES_DB: vpp
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: public
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+      - ./data/grafana:/var/lib/grafana
+    depends_on:
+      - influxdb
+
+  app:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - emqx
+      - influxdb
+      - postgres

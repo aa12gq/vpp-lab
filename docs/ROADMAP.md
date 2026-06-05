@@ -1,0 +1,38 @@
+# 路线图
+
+## 阶段 1：单设备闭环
+
+- 启动 EMQX、InfluxDB、PostgreSQL、Grafana
+- 启动 Go 平台服务
+- 启动 simulator 或 ESP32 负载节点
+- Grafana 查看功率曲线
+- HTTP API 下发继电器控制命令
+
+## 阶段 2：多设备聚合
+
+- 注册 PV、电池、关键负载、非关键负载
+- 接入多个 ESP32
+- 展示站点总发电、总负载、净功率、SOC
+
+## 阶段 3：规则调度
+
+- 配置 SOC 上下限
+- 配置负载切除阈值
+- 调度器自动发布 `set_mode` 和 `set_relay`
+- ESP32 回传 command/ack
+
+## 阶段 4：预测优化
+
+- 引入分时电价表
+- 引入天气/光照数据
+- 用 Python 服务替换当前 simple plan
+- 输出未来 24 小时 15 分钟粒度计划
+
+## 阶段 5：工程化
+
+- MQTT TLS
+- 每设备唯一密钥
+- 操作审计
+- Redis 实时状态
+- Prometheus 指标
+- 边缘网关离线缓存

@@ -1,0 +1,80 @@
+# 小型虚拟电厂架构方案
+
+## 定位
+
+本项目定位为个人/小团队可落地的小型 VPP 实验平台，覆盖：
+
+- 阶段 1：单设备闭环
+- 阶段 2：多设备聚合
+- 阶段 3：规则调度
+- 阶段 4：简单预测/优化计划
+
+阶段 5 的工程化能力通过模块边界预留，不在首版堆复杂度。
+
+## 分层
+
+```text
+ESP32 感知层
+  -> MQTT 网络层
+  -> Go 平台层
+  -> InfluxDB/PostgreSQL 数据层
+  -> Grafana/HTTP API 应用层
+```
+
+## 当前实现
+
+首版采用模块化单体：
+
+```text
+cmd/vpp-lab
+internal/api          HTTP API
+internal/mqtt         MQTT 接入和命令发布
+internal/scheduler    实时规则调度
+internal/optimizer    24h 简单计划生成
+internal/repository   PostgreSQL 设备数据
+internal/timeseries   InfluxDB 遥测写入
+internal/state        内存实时状态
+```
+
+这样做的原因：
+
+- 家用实验项目先保证能跑通闭环。
+- Go 模块边界已经按服务职责切好。
+- 后续拆成设备服务、数据服务、调度服务时，接口基本不变。
+
+## 数据流
+
+```text
+ESP32/simulator
+  -> EMQX
+  -> Go MQTT subscriber
+  -> memory state
+  -> InfluxDB
+  -> scheduler
+  -> MQTT command
+  -> ESP32 command/ack
+```
+
+设备元信息：
+
+```text
+HTTP API / seed data -> PostgreSQL -> memory state
+```
+
+## 调度策略
+
+实时调度周期默认 5 秒。
+
+规则：
+
+- 光伏过剩且电池 SOC 未满：电池充电
+- 负荷缺口且电池 SOC 足够：电池放电
+- 负荷缺口超过阈值：关闭非关键负载
+
+## 阶段 5 扩展点
+
+- `internal/state` 替换为 Redis
+- `internal/mqtt` 增加 TLS、用户名密码、设备证书
+- `internal/scheduler` 拆成独立服务
+- `internal/optimizer` 替换为 Python gRPC 优化服务
+- 增加边缘网关模块：SQLite 缓存、离线自治、Modbus 适配器

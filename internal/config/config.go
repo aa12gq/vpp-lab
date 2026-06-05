@@ -1,0 +1,76 @@
+package config
+
+import (
+	"os"
+	"strconv"
+	"time"
+)
+
+type Config struct {
+	HTTPAddr          string
+	SiteID            string
+	MQTTBroker        string
+	MQTTClientID      string
+	MQTTUsername      string
+	MQTTPassword      string
+	InfluxURL         string
+	InfluxToken       string
+	InfluxOrg         string
+	InfluxBucket      string
+	PostgresDSN       string
+	SchedulerInterval time.Duration
+	BatteryMinSOC     float64
+	BatteryMaxSOC     float64
+	LoadShedThreshold float64
+}
+
+func Load() Config {
+	return Config{
+		HTTPAddr:          getenv("HTTP_ADDR", ":8080"),
+		SiteID:            getenv("SITE_ID", "home-lab"),
+		MQTTBroker:        getenv("MQTT_BROKER", "tcp://localhost:1883"),
+		MQTTClientID:      getenv("MQTT_CLIENT_ID", "vpp-platform"),
+		MQTTUsername:      getenv("MQTT_USERNAME", ""),
+		MQTTPassword:      getenv("MQTT_PASSWORD", ""),
+		InfluxURL:         getenv("INFLUX_URL", "http://localhost:8086"),
+		InfluxToken:       getenv("INFLUX_TOKEN", "vpp-lab-token"),
+		InfluxOrg:         getenv("INFLUX_ORG", "vpp-lab"),
+		InfluxBucket:      getenv("INFLUX_BUCKET", "vpp"),
+		PostgresDSN:       getenv("POSTGRES_DSN", "postgres://vpp:vpp@localhost:5432/vpp?sslmode=disable"),
+		SchedulerInterval: getdur("SCHEDULER_INTERVAL", 5*time.Second),
+		BatteryMinSOC:     getfloat("BATTERY_MIN_SOC", 0.25),
+		BatteryMaxSOC:     getfloat("BATTERY_MAX_SOC", 0.90),
+		LoadShedThreshold: getfloat("LOAD_SHED_THRESHOLD_W", 80),
+	}
+}
+
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func getdur(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return fallback
+	}
+	return d
+}
+
+func getfloat(key string, fallback float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fallback
+	}
+	return f
+}
