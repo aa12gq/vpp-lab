@@ -41,6 +41,29 @@ curl http://localhost:8080/api/v1/sites/home-lab/plan
 curl http://localhost:8080/api/v1/commands
 ```
 
+生成自定义日前计划：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sites/home-lab/plan \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "horizon_hours": 24,
+    "slot_minutes": 15,
+    "battery_capacity_wh": 150,
+    "battery_power_limit_w": 50,
+    "min_soc": 0.25,
+    "max_soc": 0.9,
+    "tariffs": [
+      {"name":"valley","start_hour":0,"end_hour":7,"price":0.32},
+      {"name":"flat","start_hour":7,"end_hour":18,"price":0.58},
+      {"name":"peak","start_hour":18,"end_hour":23,"price":0.95},
+      {"name":"flat","start_hour":23,"end_hour":24,"price":0.58}
+    ]
+  }'
+```
+
+计划输出包含每个 15 分钟时隙的预测光伏、预测负载、电价、建议电池动作、目标功率和预测 SOC。当前它只生成建议，不直接控制设备；实时控制仍由规则调度器负责。
+
 Grafana：
 
 - URL: http://localhost:3000

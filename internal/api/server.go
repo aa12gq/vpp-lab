@@ -40,6 +40,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/devices", s.upsertDevice)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/summary", s.summary)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/plan", s.plan)
+	mux.HandleFunc("POST /api/v1/sites/{site_id}/plan", s.customPlan)
 	mux.HandleFunc("GET /api/v1/commands", s.commands)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
@@ -94,7 +95,20 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 	if siteID == "" {
 		siteID = s.siteID
 	}
-	writeJSON(w, http.StatusOK, optimizer.BuildSimpleDayPlan(time.Now(), s.store.Summary(siteID)))
+	writeJSON(w, http.StatusOK, optimizer.BuildDayAheadPlan(time.Now(), s.store.Summary(siteID), optimizer.DefaultConfig()))
+}
+
+func (s *Server) customPlan(w http.ResponseWriter, r *http.Request) {
+	siteID := r.PathValue("site_id")
+	if siteID == "" {
+		siteID = s.siteID
+	}
+	var cfg optimizer.Config
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, optimizer.BuildDayAheadPlan(time.Now(), s.store.Summary(siteID), cfg))
 }
 
 func (s *Server) commands(w http.ResponseWriter, _ *http.Request) {
