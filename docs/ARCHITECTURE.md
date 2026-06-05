@@ -108,7 +108,7 @@ API / scheduler / dispatch apply
 监控指标：
 
 - `/metrics` 输出 Prometheus 文本格式
-- 包含站点功率、平均 SOC、设备在线状态、设备遥测、命令状态计数、设备事件计数和审计操作计数
+- 包含站点功率、平均 SOC、设备在线状态、设备遥测、命令状态计数、设备事件计数、审计操作计数和 MQTT 拒绝消息计数
 - 设备在线状态基于最近遥测时间计算，默认 30 秒内视为在线
 - Docker Compose 内置 Prometheus，默认抓取 `app:8080/metrics`
 - Prometheus 内置基础规则：设备离线、命令失败、控制操作失败、净负荷过高、设备 warning/critical 事件

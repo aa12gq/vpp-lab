@@ -115,7 +115,7 @@ curl http://localhost:8080/api/v1/audit-logs
 
 `/api/v1/audit-logs` 返回最近 200 条控制操作审计记录。当前覆盖设备注册、策略修改、手动命令和调度确认下发；会记录 actor、method、path、状态码和客户端 IP，不记录 token 或请求体。可用 `X-VPP-Actor` 标记操作者。
 
-`/metrics` 使用 Prometheus 文本格式输出站点功率、设备在线状态、设备最新遥测、命令状态计数、设备事件计数和审计操作计数。
+`/metrics` 使用 Prometheus 文本格式输出站点功率、设备在线状态、设备最新遥测、命令状态计数、设备事件计数、审计操作计数和 MQTT 拒绝消息计数。
 
 生成自定义日前计划：
 

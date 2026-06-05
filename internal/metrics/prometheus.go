@@ -20,6 +20,7 @@ type Snapshot struct {
 	Commands    []model.CommandRecord
 	Events      []model.DeviceEvent
 	AuditLogs   []model.AuditLog
+	MQTTRejects map[string]uint64
 }
 
 func RenderPrometheus(s Snapshot) string {
@@ -67,6 +68,11 @@ func RenderPrometheus(s Snapshot) string {
 	writeType(&b, "vpp_audit_logs_total", "gauge")
 	for key, count := range auditLogCounts(s.AuditLogs) {
 		writeMetric(&b, "vpp_audit_logs_total", map[string]string{"site_id": s.SiteID, "action": key.action, "status_code": key.statusCode}, float64(count))
+	}
+	writeHelp(&b, "vpp_mqtt_rejected_messages_total", "MQTT messages rejected by the platform.")
+	writeType(&b, "vpp_mqtt_rejected_messages_total", "counter")
+	for _, reason := range sortedRejectReasons(s.MQTTRejects) {
+		writeMetric(&b, "vpp_mqtt_rejected_messages_total", map[string]string{"site_id": s.SiteID, "reason": reason}, float64(s.MQTTRejects[reason]))
 	}
 	return b.String()
 }
@@ -168,4 +174,13 @@ func auditLogCounts(logs []model.AuditLog) map[auditLogKey]int {
 		counts[auditLogKey{action: action, statusCode: statusCode}]++
 	}
 	return counts
+}
+
+func sortedRejectReasons(rejects map[string]uint64) []string {
+	reasons := make([]string, 0, len(rejects))
+	for reason := range rejects {
+		reasons = append(reasons, reason)
+	}
+	sort.Strings(reasons)
+	return reasons
 }

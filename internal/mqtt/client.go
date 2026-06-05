@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
@@ -24,6 +25,8 @@ type Client struct {
 	ts       *timeseries.Writer
 	recorder CommandRecorder
 	keys     deviceauth.Keys
+	rejectMu sync.RWMutex
+	rejects  map[string]uint64
 }
 
 type CommandRecorder interface {
@@ -33,7 +36,7 @@ type CommandRecorder interface {
 }
 
 func NewClient(cfg config.Config, store *state.Store, ts *timeseries.Writer) *Client {
-	return &Client{cfg: cfg, state: store, ts: ts}
+	return &Client{cfg: cfg, state: store, ts: ts, rejects: make(map[string]uint64)}
 }
 
 func (c *Client) WithCommandRecorder(recorder CommandRecorder) *Client {
@@ -117,6 +120,7 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 	}
 	if requiresDeviceAuth(parsed.Kind) {
 		if err := deviceauth.VerifyPayload(msg.Topic(), parsed.DeviceID, msg.Payload(), c.keys, time.Now(), c.cfg.DeviceAuthMaxSkew); err != nil {
+			c.incrementRejected("auth")
 			log.Printf("reject mqtt message topic=%s auth=%v", msg.Topic(), err)
 			return
 		}
@@ -185,6 +189,25 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 	default:
 		log.Printf("ignored mqtt topic=%s", msg.Topic())
 	}
+}
+
+func (c *Client) RejectedMessages() map[string]uint64 {
+	c.rejectMu.RLock()
+	defer c.rejectMu.RUnlock()
+	out := make(map[string]uint64, len(c.rejects))
+	for reason, count := range c.rejects {
+		out[reason] = count
+	}
+	return out
+}
+
+func (c *Client) incrementRejected(reason string) {
+	c.rejectMu.Lock()
+	defer c.rejectMu.Unlock()
+	if c.rejects == nil {
+		c.rejects = make(map[string]uint64)
+	}
+	c.rejects[reason]++
 }
 
 func requiresDeviceAuth(kind string) bool {

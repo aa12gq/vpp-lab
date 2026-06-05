@@ -31,6 +31,7 @@ func TestRenderPrometheusIncludesDeviceAndCommandMetrics(t *testing.T) {
 			{Action: "policy.update", StatusCode: 200},
 			{Action: "policy.update", StatusCode: 401},
 		},
+		MQTTRejects: map[string]uint64{"auth": 2},
 	})
 	for _, want := range []string{
 		`vpp_site_power_w{component="pv",site_id="home-lab"} 90.000000`,
@@ -39,6 +40,7 @@ func TestRenderPrometheusIncludesDeviceAndCommandMetrics(t *testing.T) {
 		`vpp_command_records_total{site_id="home-lab",status="acked"} 1.000000`,
 		`vpp_audit_logs_total{action="policy.update",site_id="home-lab",status_code="200"} 1.000000`,
 		`vpp_audit_logs_total{action="policy.update",site_id="home-lab",status_code="401"} 1.000000`,
+		`vpp_mqtt_rejected_messages_total{reason="auth",site_id="home-lab"} 2.000000`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing metric %q in:\n%s", want, out)

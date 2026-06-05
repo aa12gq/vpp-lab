@@ -32,6 +32,10 @@ type AuditRecorder interface {
 	ListAuditLogs(ctx context.Context, limit int) ([]model.AuditLog, error)
 }
 
+type MQTTRejectsProvider interface {
+	RejectedMessages() map[string]uint64
+}
+
 type HealthCheck struct {
 	Name  string
 	Check func(context.Context) error
@@ -117,6 +121,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	auditLogs := s.recentAuditLogs(r.Context())
+	mqttRejects := s.mqttRejects()
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(metrics.RenderPrometheus(metrics.Snapshot{
 		GeneratedAt: time.Now(),
@@ -127,6 +132,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		Commands:    s.store.Commands(),
 		Events:      s.store.Events(),
 		AuditLogs:   auditLogs,
+		MQTTRejects: mqttRejects,
 	})))
 }
 
@@ -140,6 +146,14 @@ func (s *Server) recentAuditLogs(ctx context.Context) []model.AuditLog {
 		return nil
 	}
 	return logs
+}
+
+func (s *Server) mqttRejects() map[string]uint64 {
+	provider, ok := s.publisher.(MQTTRejectsProvider)
+	if !ok {
+		return nil
+	}
+	return provider.RejectedMessages()
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {

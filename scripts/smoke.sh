@@ -44,6 +44,7 @@ printf '%s' "$audit_logs" | grep -q '^\[' || fail "audit logs response is not a 
 echo "checking api metrics"
 metrics="$(curl -fsS "$API_BASE/metrics")" || fail "api metrics request failed"
 echo "$metrics" | grep -q 'vpp_audit_logs_total' || fail "missing audit log metric"
+echo "$metrics" | grep -q 'vpp_mqtt_rejected_messages_total' || fail "missing mqtt rejected messages metric"
 
 echo "checking prometheus online devices"
 prom="$(curl -fsS "$PROM_BASE/api/v1/query?query=sum%28vpp_device_online%29")" || fail "prometheus request failed"
