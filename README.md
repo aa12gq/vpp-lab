@@ -120,6 +120,8 @@ Grafana：
 - URL: http://localhost:3000
 - 用户名: `admin`
 - 密码: `public`
+- Overview Dashboard: http://localhost:3000/d/vpp-lab-overview/vpp-lab-overview
+- Operations Dashboard: http://localhost:3000/d/vpp-lab-operations/vpp-lab-operations
 
 Prometheus：
 

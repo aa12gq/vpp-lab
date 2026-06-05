@@ -112,6 +112,7 @@ API / scheduler / dispatch apply
 - Docker Compose 内置 Prometheus，默认抓取 `app:8080/metrics`
 - Prometheus 内置基础规则：设备离线、命令失败、净负荷过高
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
+- Grafana 内置 Overview 和 Operations 两个 dashboard
 
 ## 阶段 5 扩展点
 
