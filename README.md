@@ -51,7 +51,7 @@ http://localhost:8080/
 make docker-edge
 ```
 
-它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT。管理端口默认是 `http://localhost:8081`：
+它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。默认只捕获 `telemetry,event,status`，可用 `EDGE_CAPTURE_KINDS` 调整。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT；本地用同一个 broker 验证转发时建议设置 `EDGE_UPSTREAM_TOPIC_PREFIX`，避免转发消息再次被本地订阅捕获形成回环。管理端口默认是 `http://localhost:8081`：
 
 ```bash
 curl http://localhost:8081/healthz

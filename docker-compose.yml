@@ -162,6 +162,8 @@ services:
       EDGE_CACHE_PATH: /data/cache.db
       EDGE_FLUSH_INTERVAL: 5s
       EDGE_HTTP_ADDR: :8081
+      EDGE_CAPTURE_KINDS: telemetry,event,status
+      EDGE_UPSTREAM_TOPIC_PREFIX: ${EDGE_UPSTREAM_TOPIC_PREFIX:-}
     ports:
       - "8081:8081"
     volumes:

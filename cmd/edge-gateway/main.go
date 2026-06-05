@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,6 +29,8 @@ func main() {
 	cachePath := getenv("EDGE_CACHE_PATH", "./data/edge-gateway/cache.db")
 	flushInterval := getdur("EDGE_FLUSH_INTERVAL", 5*time.Second)
 	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
+	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status"))
+	upstreamTopicPrefix := strings.Trim(getenv("EDGE_UPSTREAM_TOPIC_PREFIX", ""), "/")
 
 	cache, err := edge.OpenCache(ctx, cachePath)
 	if err != nil {
@@ -36,7 +39,8 @@ func main() {
 	defer cache.Close()
 
 	local := newMQTTClient(localBroker, getenv("EDGE_LOCAL_CLIENT_ID", "vpp-edge-gateway-local"), func(_ paho.Client, msg paho.Message) {
-		if _, ok := topic.Parse(msg.Topic()); !ok {
+		parsed, ok := topic.Parse(msg.Topic())
+		if !ok || !captureKinds[parsed.Kind] {
 			return
 		}
 		payload := append([]byte(nil), msg.Payload()...)
@@ -64,8 +68,8 @@ func main() {
 			log.Fatalf("connect upstream mqtt: %v", err)
 		}
 		defer upstream.Disconnect(250)
-		go flushLoop(ctx, cache, upstream, flushInterval)
-		log.Printf("edge gateway upstream enabled broker=%s interval=%s", upstreamBroker, flushInterval)
+		go flushLoop(ctx, cache, upstream, flushInterval, upstreamTopicPrefix)
+		log.Printf("edge gateway upstream enabled broker=%s interval=%s topic_prefix=%q", upstreamBroker, flushInterval, upstreamTopicPrefix)
 	} else {
 		log.Printf("edge gateway upstream disabled; messages stay cached")
 	}
@@ -144,7 +148,7 @@ func boolFloat(ok bool) float64 {
 	return 0
 }
 
-func flushLoop(ctx context.Context, cache *edge.Cache, upstream paho.Client, interval time.Duration) {
+func flushLoop(ctx context.Context, cache *edge.Cache, upstream paho.Client, interval time.Duration, topicPrefix string) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -152,12 +156,12 @@ func flushLoop(ctx context.Context, cache *edge.Cache, upstream paho.Client, int
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			flushPending(ctx, cache, upstream)
+			flushPending(ctx, cache, upstream, topicPrefix)
 		}
 	}
 }
 
-func flushPending(ctx context.Context, cache *edge.Cache, upstream paho.Client) {
+func flushPending(ctx context.Context, cache *edge.Cache, upstream paho.Client, topicPrefix string) {
 	if upstream == nil || !upstream.IsConnected() {
 		return
 	}
@@ -167,17 +171,38 @@ func flushPending(ctx context.Context, cache *edge.Cache, upstream paho.Client) 
 		return
 	}
 	for _, msg := range pending {
-		token := upstream.Publish(msg.Topic, 1, false, msg.Payload)
+		targetTopic := upstreamTopic(msg.Topic, topicPrefix)
+		token := upstream.Publish(targetTopic, 1, false, msg.Payload)
 		if token.Wait() && token.Error() != nil {
-			log.Printf("forward failed id=%d topic=%s err=%v", msg.ID, msg.Topic, token.Error())
+			log.Printf("forward failed id=%d topic=%s target=%s err=%v", msg.ID, msg.Topic, targetTopic, token.Error())
 			return
 		}
 		if err := cache.MarkSent(ctx, msg.ID); err != nil {
 			log.Printf("mark sent failed id=%d err=%v", msg.ID, err)
 			return
 		}
-		log.Printf("forwarded id=%d topic=%s", msg.ID, msg.Topic)
+		log.Printf("forwarded id=%d topic=%s target=%s", msg.ID, msg.Topic, targetTopic)
 	}
+}
+
+func parseKindSet(raw string) map[string]bool {
+	out := make(map[string]bool)
+	for _, part := range strings.Split(raw, ",") {
+		kind := strings.TrimSpace(part)
+		if kind == "" {
+			continue
+		}
+		out[kind] = true
+	}
+	return out
+}
+
+func upstreamTopic(original string, prefix string) string {
+	prefix = strings.Trim(prefix, "/")
+	if prefix == "" {
+		return original
+	}
+	return prefix + "/" + strings.TrimLeft(original, "/")
 }
 
 func newMQTTClient(broker, clientID string, handler paho.MessageHandler) paho.Client {
