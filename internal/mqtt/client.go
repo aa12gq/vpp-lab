@@ -60,6 +60,18 @@ func (c *Client) Connect(ctx context.Context) error {
 	if c.cfg.MQTTUsername != "" {
 		opts.SetUsername(c.cfg.MQTTUsername).SetPassword(c.cfg.MQTTPassword)
 	}
+	tlsConfig, err := NewTLSConfig(TLSFiles{
+		CAFile:             c.cfg.MQTTTLSCAFile,
+		CertFile:           c.cfg.MQTTTLSCertFile,
+		KeyFile:            c.cfg.MQTTTLSKeyFile,
+		InsecureSkipVerify: c.cfg.MQTTTLSInsecure,
+	})
+	if err != nil {
+		return err
+	}
+	if tlsConfig != nil {
+		opts.SetTLSConfig(tlsConfig)
+	}
 	c.client = paho.NewClient(opts)
 	token := c.client.Connect()
 	if token.Wait() && token.Error() != nil {

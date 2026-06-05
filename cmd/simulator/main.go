@@ -5,12 +5,14 @@ import (
 	"log"
 	"math"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
 	"vpp-lab/internal/model"
+	vppmqtt "vpp-lab/internal/mqtt"
 	"vpp-lab/internal/topic"
 )
 
@@ -35,6 +37,18 @@ func main() {
 		})
 	if username := getenv("MQTT_USERNAME", ""); username != "" {
 		opts.SetUsername(username).SetPassword(getenv("MQTT_PASSWORD", ""))
+	}
+	tlsConfig, err := vppmqtt.NewTLSConfig(vppmqtt.TLSFiles{
+		CAFile:             getenv("MQTT_TLS_CA_FILE", ""),
+		CertFile:           getenv("MQTT_TLS_CERT_FILE", ""),
+		KeyFile:            getenv("MQTT_TLS_KEY_FILE", ""),
+		InsecureSkipVerify: getbool("MQTT_TLS_INSECURE_SKIP_VERIFY", false),
+	})
+	if err != nil {
+		log.Fatalf("load mqtt tls config: %v", err)
+	}
+	if tlsConfig != nil {
+		opts.SetTLSConfig(tlsConfig)
 	}
 	client := paho.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
@@ -88,6 +102,18 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getbool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
 
 type simulator struct {

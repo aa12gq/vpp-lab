@@ -13,6 +13,10 @@ type Config struct {
 	MQTTClientID      string
 	MQTTUsername      string
 	MQTTPassword      string
+	MQTTTLSCAFile     string
+	MQTTTLSCertFile   string
+	MQTTTLSKeyFile    string
+	MQTTTLSInsecure   bool
 	InfluxURL         string
 	InfluxToken       string
 	InfluxOrg         string
@@ -36,6 +40,10 @@ func Load() Config {
 		MQTTClientID:      getenv("MQTT_CLIENT_ID", "vpp-platform"),
 		MQTTUsername:      getenv("MQTT_USERNAME", ""),
 		MQTTPassword:      getenv("MQTT_PASSWORD", ""),
+		MQTTTLSCAFile:     getenv("MQTT_TLS_CA_FILE", ""),
+		MQTTTLSCertFile:   getenv("MQTT_TLS_CERT_FILE", ""),
+		MQTTTLSKeyFile:    getenv("MQTT_TLS_KEY_FILE", ""),
+		MQTTTLSInsecure:   getbool("MQTT_TLS_INSECURE_SKIP_VERIFY", false),
 		InfluxURL:         getenv("INFLUX_URL", "http://localhost:8086"),
 		InfluxToken:       getenv("INFLUX_TOKEN", "vpp-lab-token"),
 		InfluxOrg:         getenv("INFLUX_ORG", "vpp-lab"),
@@ -93,4 +101,16 @@ func getint(key string, fallback int) int {
 		return fallback
 	}
 	return i
+}
+
+func getbool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }

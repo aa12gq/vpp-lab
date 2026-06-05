@@ -116,7 +116,7 @@ API / scheduler / dispatch apply
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
 - Docker Compose 内置可选 edge-gateway profile，用于验证边缘 SQLite 缓存、HTTP 管理端和上游转发
-- 平台服务、simulator 和 edge-gateway 均支持 MQTT 用户名/密码；edge-gateway 可为本地 broker 和上游 broker 分别配置凭据
+- 平台服务、simulator 和 edge-gateway 均支持 MQTT 用户名/密码和客户端 TLS；edge-gateway 可为本地 broker 和上游 broker 分别配置凭据与 TLS 文件
 - Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态
 - `/healthz` 检查 MQTT、PostgreSQL 和状态缓存，依赖异常时返回 503
 - `/api/v1/sites/{site_id}/device-states` 输出设备元信息、最新遥测、在线状态和 stale 秒数
@@ -127,7 +127,7 @@ API / scheduler / dispatch apply
 ## 阶段 5 扩展点
 
 - Redis 状态缓存扩展为多实例共享状态、过期策略和状态变更事件
-- `internal/mqtt` 增加 TLS、用户名密码、设备证书
+- `internal/mqtt` 当前支持用户名密码和客户端 TLS，后续补每设备证书签发与轮换
 - `internal/scheduler` 拆成独立服务
 - `internal/optimizer` 替换为 Python gRPC 优化服务
 - 边缘网关继续扩展：离线自治、Modbus 适配器、断点续传策略

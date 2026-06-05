@@ -72,6 +72,8 @@ go run ./cmd/vpp-lab
 
 平台服务、simulator 和 edge-gateway 都支持 `MQTT_USERNAME` / `MQTT_PASSWORD`。edge-gateway 还可用 `EDGE_LOCAL_USERNAME` / `EDGE_LOCAL_PASSWORD` 和 `EDGE_UPSTREAM_USERNAME` / `EDGE_UPSTREAM_PASSWORD` 分别覆盖本地 broker 与上游 broker 的凭据。
 
+MQTT 客户端 TLS 可通过 `MQTT_TLS_CA_FILE`、`MQTT_TLS_CERT_FILE`、`MQTT_TLS_KEY_FILE`、`MQTT_TLS_INSECURE_SKIP_VERIFY` 开启；edge-gateway 支持 `EDGE_LOCAL_TLS_*` 和 `EDGE_UPSTREAM_TLS_*` 分别覆盖本地/上游 broker。默认全部为空，仍使用本地明文 `tcp://` 连接。
+
 Redis 是可选增强。设置 `REDIS_ADDR=localhost:6379` 后，平台会缓存每台设备的最新遥测，服务重启后可恢复实时 summary；不设置时仍使用内存状态。
 
 本机调试时可另开终端启动模拟器：

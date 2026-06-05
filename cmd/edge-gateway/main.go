@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 
 	"vpp-lab/internal/edge"
+	vppmqtt "vpp-lab/internal/mqtt"
 	"vpp-lab/internal/topic"
 )
 
@@ -37,6 +39,24 @@ func main() {
 	localPassword := getenv("EDGE_LOCAL_PASSWORD", getenv("MQTT_PASSWORD", ""))
 	upstreamUsername := getenv("EDGE_UPSTREAM_USERNAME", getenv("MQTT_USERNAME", ""))
 	upstreamPassword := getenv("EDGE_UPSTREAM_PASSWORD", getenv("MQTT_PASSWORD", ""))
+	localTLS, err := vppmqtt.NewTLSConfig(vppmqtt.TLSFiles{
+		CAFile:             getenv("EDGE_LOCAL_TLS_CA_FILE", getenv("MQTT_TLS_CA_FILE", "")),
+		CertFile:           getenv("EDGE_LOCAL_TLS_CERT_FILE", getenv("MQTT_TLS_CERT_FILE", "")),
+		KeyFile:            getenv("EDGE_LOCAL_TLS_KEY_FILE", getenv("MQTT_TLS_KEY_FILE", "")),
+		InsecureSkipVerify: getbool("EDGE_LOCAL_TLS_INSECURE_SKIP_VERIFY", getbool("MQTT_TLS_INSECURE_SKIP_VERIFY", false)),
+	})
+	if err != nil {
+		log.Fatalf("load local mqtt tls config: %v", err)
+	}
+	upstreamTLS, err := vppmqtt.NewTLSConfig(vppmqtt.TLSFiles{
+		CAFile:             getenv("EDGE_UPSTREAM_TLS_CA_FILE", getenv("MQTT_TLS_CA_FILE", "")),
+		CertFile:           getenv("EDGE_UPSTREAM_TLS_CERT_FILE", getenv("MQTT_TLS_CERT_FILE", "")),
+		KeyFile:            getenv("EDGE_UPSTREAM_TLS_KEY_FILE", getenv("MQTT_TLS_KEY_FILE", "")),
+		InsecureSkipVerify: getbool("EDGE_UPSTREAM_TLS_INSECURE_SKIP_VERIFY", getbool("MQTT_TLS_INSECURE_SKIP_VERIFY", false)),
+	})
+	if err != nil {
+		log.Fatalf("load upstream mqtt tls config: %v", err)
+	}
 
 	cache, err := edge.OpenCache(ctx, cachePath)
 	if err != nil {
@@ -50,7 +70,7 @@ func main() {
 		log.Printf("edge cache cleanup disabled retention=%s interval=%s", cacheRetention, cleanupInterval)
 	}
 
-	local := newMQTTClient(localBroker, getenv("EDGE_LOCAL_CLIENT_ID", "vpp-edge-gateway-local"), localUsername, localPassword, func(_ paho.Client, msg paho.Message) {
+	local := newMQTTClient(localBroker, getenv("EDGE_LOCAL_CLIENT_ID", "vpp-edge-gateway-local"), localUsername, localPassword, localTLS, func(_ paho.Client, msg paho.Message) {
 		parsed, ok := topic.Parse(msg.Topic())
 		if !ok || !captureKinds[parsed.Kind] {
 			return
@@ -75,7 +95,7 @@ func main() {
 
 	var upstream paho.Client
 	if upstreamBroker != "" {
-		upstream = newMQTTClient(upstreamBroker, getenv("EDGE_UPSTREAM_CLIENT_ID", "vpp-edge-gateway-upstream"), upstreamUsername, upstreamPassword, nil)
+		upstream = newMQTTClient(upstreamBroker, getenv("EDGE_UPSTREAM_CLIENT_ID", "vpp-edge-gateway-upstream"), upstreamUsername, upstreamPassword, upstreamTLS, nil)
 		if err := connect(upstream); err != nil {
 			log.Fatalf("connect upstream mqtt: %v", err)
 		}
@@ -259,7 +279,7 @@ func upstreamTopic(original string, prefix string) string {
 	return prefix + "/" + strings.TrimLeft(original, "/")
 }
 
-func newMQTTClient(broker, clientID string, username, password string, handler paho.MessageHandler) paho.Client {
+func newMQTTClient(broker, clientID string, username, password string, tlsConfig *tls.Config, handler paho.MessageHandler) paho.Client {
 	opts := paho.NewClientOptions().
 		AddBroker(broker).
 		SetClientID(clientID).
@@ -271,6 +291,9 @@ func newMQTTClient(broker, clientID string, username, password string, handler p
 	}
 	if username != "" {
 		opts.SetUsername(username).SetPassword(password)
+	}
+	if tlsConfig != nil {
+		opts.SetTLSConfig(tlsConfig)
 	}
 	return paho.NewClient(opts)
 }
@@ -304,4 +327,16 @@ func getdur(key string, fallback time.Duration) time.Duration {
 		return time.Duration(i) * time.Second
 	}
 	return fallback
+}
+
+func getbool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
