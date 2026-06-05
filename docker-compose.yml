@@ -161,9 +161,17 @@ services:
       EDGE_LOCAL_BROKER: tcp://emqx:1883
       EDGE_CACHE_PATH: /data/cache.db
       EDGE_FLUSH_INTERVAL: 5s
+      EDGE_HTTP_ADDR: :8081
+    ports:
+      - "8081:8081"
     volumes:
       - ./data/edge-gateway:/data
     restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8081/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
       emqx:
         condition: service_healthy

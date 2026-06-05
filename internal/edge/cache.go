@@ -20,6 +20,11 @@ type Cache struct {
 	db *sql.DB
 }
 
+type CacheStats struct {
+	Pending int64 `json:"pending"`
+	Total   int64 `json:"total"`
+}
+
 func OpenCache(ctx context.Context, path string) (*Cache, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -89,12 +94,13 @@ func (c *Cache) MarkSent(ctx context.Context, id int64) error {
 	return err
 }
 
-func (c *Cache) Stats(ctx context.Context) (pending int64, total int64, err error) {
-	if err = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mqtt_messages WHERE sent_at IS NULL`).Scan(&pending); err != nil {
-		return 0, 0, err
+func (c *Cache) Stats(ctx context.Context) (CacheStats, error) {
+	var stats CacheStats
+	if err := c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mqtt_messages WHERE sent_at IS NULL`).Scan(&stats.Pending); err != nil {
+		return CacheStats{}, err
 	}
-	if err = c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mqtt_messages`).Scan(&total); err != nil {
-		return 0, 0, err
+	if err := c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mqtt_messages`).Scan(&stats.Total); err != nil {
+		return CacheStats{}, err
 	}
-	return pending, total, nil
+	return stats, nil
 }

@@ -115,7 +115,7 @@ API / scheduler / dispatch apply
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
-- Docker Compose 内置可选 edge-gateway profile，用于验证边缘 SQLite 缓存和上游转发
+- Docker Compose 内置可选 edge-gateway profile，用于验证边缘 SQLite 缓存、HTTP 管理端和上游转发
 - Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态
 - `/healthz` 检查 MQTT、PostgreSQL 和状态缓存，依赖异常时返回 503
 - `/api/v1/sites/{site_id}/device-states` 输出设备元信息、最新遥测、在线状态和 stale 秒数

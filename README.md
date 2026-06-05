@@ -51,7 +51,13 @@ http://localhost:8080/
 make docker-edge
 ```
 
-它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT。
+它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT。管理端口默认是 `http://localhost:8081`：
+
+```bash
+curl http://localhost:8081/healthz
+curl http://localhost:8081/api/v1/cache/stats
+curl http://localhost:8081/metrics
+```
 
 如果只想本机调试 Go 服务：
 

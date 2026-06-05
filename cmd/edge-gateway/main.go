@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -24,6 +27,7 @@ func main() {
 	upstreamBroker := getenv("EDGE_UPSTREAM_BROKER", "")
 	cachePath := getenv("EDGE_CACHE_PATH", "./data/edge-gateway/cache.db")
 	flushInterval := getdur("EDGE_FLUSH_INTERVAL", 5*time.Second)
+	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
 
 	cache, err := edge.OpenCache(ctx, cachePath)
 	if err != nil {
@@ -66,7 +70,78 @@ func main() {
 		log.Printf("edge gateway upstream disabled; messages stay cached")
 	}
 
+	httpSrv := &http.Server{
+		Addr:              httpAddr,
+		Handler:           edgeHTTPHandler(cache, local, upstream),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		log.Printf("edge gateway http listening on %s", httpAddr)
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("edge http server: %v", err)
+		}
+	}()
+
 	<-ctx.Done()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = httpSrv.Shutdown(shutdownCtx)
+}
+
+func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		status := http.StatusOK
+		body := map[string]interface{}{
+			"status":              "ok",
+			"local_mqtt":          local != nil && local.IsConnected(),
+			"upstream_configured": upstream != nil,
+			"upstream_mqtt":       upstream != nil && upstream.IsConnected(),
+		}
+		if local == nil || !local.IsConnected() {
+			status = http.StatusServiceUnavailable
+			body["status"] = "degraded"
+		}
+		writeJSON(w, status, body)
+	})
+	mux.HandleFunc("GET /api/v1/cache/stats", func(w http.ResponseWriter, r *http.Request) {
+		stats, err := cache.Stats(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, stats)
+	})
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		stats, err := cache.Stats(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		_, _ = fmt.Fprintf(w, "# HELP vpp_edge_cache_messages Edge MQTT cache messages by state.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_cache_messages gauge\n")
+		_, _ = fmt.Fprintf(w, "vpp_edge_cache_messages{state=\"pending\"} %d\n", stats.Pending)
+		_, _ = fmt.Fprintf(w, "vpp_edge_cache_messages{state=\"total\"} %d\n", stats.Total)
+		_, _ = fmt.Fprintf(w, "# HELP vpp_edge_mqtt_connected Edge MQTT connection state.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_mqtt_connected gauge\n")
+		_, _ = fmt.Fprintf(w, "vpp_edge_mqtt_connected{side=\"local\"} %.0f\n", boolFloat(local != nil && local.IsConnected()))
+		_, _ = fmt.Fprintf(w, "vpp_edge_mqtt_connected{side=\"upstream\"} %.0f\n", boolFloat(upstream != nil && upstream.IsConnected()))
+	})
+	return mux
+}
+
+func writeJSON(w http.ResponseWriter, code int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func boolFloat(ok bool) float64 {
+	if ok {
+		return 1
+	}
+	return 0
 }
 
 func flushLoop(ctx context.Context, cache *edge.Cache, upstream paho.Client, interval time.Duration) {
