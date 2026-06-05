@@ -49,4 +49,8 @@ echo "checking prometheus online devices"
 prom="$(curl -fsS "$PROM_BASE/api/v1/query?query=sum%28vpp_device_online%29")" || fail "prometheus request failed"
 echo "$prom" | grep -q '"status":"success"' || fail "prometheus query failed: $prom"
 
+echo "checking prometheus rules"
+rules="$(curl -fsS "$PROM_BASE/api/v1/rules")" || fail "prometheus rules request failed"
+echo "$rules" | grep -q 'VPPAuditControlFailure' || fail "missing audit control failure alert rule"
+
 echo "smoke ok: $online_count online device(s)"

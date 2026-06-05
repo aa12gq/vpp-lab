@@ -20,6 +20,15 @@ groups:
           summary: "VPP command failure recorded"
           description: "Recent command history contains failed commands at site {{ $labels.site_id }}."
 
+      - alert: VPPAuditControlFailure
+        expr: vpp_audit_logs_total{status_code=~"4..|5.."} > 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: "VPP control operation failure"
+          description: "Recent audit history contains failed control operation {{ $labels.action }} at site {{ $labels.site_id }}."
+
       - alert: VPPHighNetLoad
         expr: vpp_site_power_w{component="net"} > 100
         for: 30s

@@ -196,7 +196,7 @@ curl http://localhost:9090/api/v1/rules
 curl http://localhost:9090/api/v1/alerts
 ```
 
-内置告警规则覆盖设备离线、命令失败、净负荷过高、设备 warning/critical 事件。
+内置告警规则覆盖设备离线、命令失败、控制操作失败、净负荷过高、设备 warning/critical 事件。
 
 EMQX Dashboard：
 
