@@ -111,6 +111,8 @@ services:
       POSTGRES_DSN: postgres://vpp:vpp@postgres:5432/vpp?sslmode=disable
       REDIS_ADDR: redis:6379
       CONTROL_TOKEN: ${CONTROL_TOKEN:-}
+      DEVICE_KEYS: ${DEVICE_KEYS:-}
+      DEVICE_AUTH_MAX_SKEW: ${DEVICE_AUTH_MAX_SKEW:-5m}
       MQTT_TLS_CA_FILE: ${MQTT_TLS_CA_FILE:-}
       MQTT_TLS_CERT_FILE: ${MQTT_TLS_CERT_FILE:-}
       MQTT_TLS_KEY_FILE: ${MQTT_TLS_KEY_FILE:-}
@@ -146,6 +148,7 @@ services:
       MQTT_TLS_CERT_FILE: ${MQTT_TLS_CERT_FILE:-}
       MQTT_TLS_KEY_FILE: ${MQTT_TLS_KEY_FILE:-}
       MQTT_TLS_INSECURE_SKIP_VERIFY: ${MQTT_TLS_INSECURE_SKIP_VERIFY:-false}
+      DEVICE_KEYS: ${DEVICE_KEYS:-}
       SITE_ID: home-lab
     restart: on-failure
     healthcheck:

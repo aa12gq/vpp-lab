@@ -11,6 +11,7 @@ import (
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
+	"vpp-lab/internal/deviceauth"
 	"vpp-lab/internal/model"
 	vppmqtt "vpp-lab/internal/mqtt"
 	"vpp-lab/internal/topic"
@@ -20,7 +21,11 @@ func main() {
 	broker := getenv("MQTT_BROKER", "tcp://localhost:1883")
 	siteID := getenv("SITE_ID", "home-lab")
 	commandTopic := "vpp/" + siteID + "/+/+/command"
-	sim := newSimulator(siteID)
+	deviceKeys, err := deviceauth.ParseKeys(getenv("DEVICE_KEYS", ""))
+	if err != nil {
+		log.Fatalf("parse device keys: %v", err)
+	}
+	sim := newSimulator(siteID, deviceKeys)
 	opts := paho.NewClientOptions().
 		AddBroker(broker).
 		SetClientID("vpp-simulator").
@@ -69,20 +74,20 @@ func main() {
 			load2 = 0
 		}
 		soc, batteryPower, batteryState := sim.batteryTelemetry()
-		publish(client, siteID, model.DevicePV, "pv_01", seq, map[string]float64{"voltage": 18, "current": pvPower / 18, "power": pvPower})
-		publishState(client, siteID, model.DeviceBattery, "battery_01", seq, batteryState, map[string]float64{"voltage": 12.4, "current": batteryPower / 12.4, "power": batteryPower, "soc": soc, "temperature": 25})
+		publish(client, siteID, model.DevicePV, "pv_01", seq, map[string]float64{"voltage": 18, "current": pvPower / 18, "power": pvPower}, deviceKeys)
+		publishState(client, siteID, model.DeviceBattery, "battery_01", seq, batteryState, map[string]float64{"voltage": 12.4, "current": batteryPower / 12.4, "power": batteryPower, "soc": soc, "temperature": 25}, deviceKeys)
 		sim.publishBatterySOCEvent(seq, soc)
-		publish(client, siteID, model.DeviceLoad, "load_01", seq, map[string]float64{"voltage": 12, "current": load1 / 12, "power": load1})
-		publish(client, siteID, model.DeviceLoad, "load_02", seq, map[string]float64{"voltage": 12, "current": load2 / 12, "power": load2})
+		publish(client, siteID, model.DeviceLoad, "load_01", seq, map[string]float64{"voltage": 12, "current": load1 / 12, "power": load1}, deviceKeys)
+		publish(client, siteID, model.DeviceLoad, "load_02", seq, map[string]float64{"voltage": 12, "current": load2 / 12, "power": load2}, deviceKeys)
 		log.Printf("published seq=%d pv=%.1f load=%.1f soc=%.2f battery=%s", seq, pvPower, load1+load2, soc, batteryState)
 	}
 }
 
-func publish(client paho.Client, siteID string, typ model.DeviceType, id string, seq int64, metrics map[string]float64) {
-	publishState(client, siteID, typ, id, seq, "online", metrics)
+func publish(client paho.Client, siteID string, typ model.DeviceType, id string, seq int64, metrics map[string]float64, keys deviceauth.Keys) {
+	publishState(client, siteID, typ, id, seq, "online", metrics, keys)
 }
 
-func publishState(client paho.Client, siteID string, typ model.DeviceType, id string, seq int64, state string, metrics map[string]float64) {
+func publishState(client paho.Client, siteID string, typ model.DeviceType, id string, seq int64, state string, metrics map[string]float64, keys deviceauth.Keys) {
 	payload, _ := json.Marshal(model.Telemetry{
 		DeviceID:  id,
 		Timestamp: time.Now().Unix(),
@@ -91,6 +96,7 @@ func publishState(client paho.Client, siteID string, typ model.DeviceType, id st
 		Seq:       seq,
 	})
 	t := topic.Telemetry(siteID, string(typ), id)
+	payload = signPayload(t, id, payload, keys)
 	token := client.Publish(t, 1, false, payload)
 	if token.Wait() && token.Error() != nil {
 		log.Printf("publish telemetry failed topic=%s err=%v", t, token.Error())
@@ -116,19 +122,37 @@ func getbool(key string, fallback bool) bool {
 	return b
 }
 
+func signPayload(topic string, deviceID string, payload []byte, keys deviceauth.Keys) []byte {
+	if !keys.Enabled() {
+		return payload
+	}
+	secret, ok := keys[deviceID]
+	if !ok {
+		return payload
+	}
+	signed, err := deviceauth.SignPayload(topic, payload, secret, time.Now())
+	if err != nil {
+		log.Printf("sign payload failed topic=%s device=%s err=%v", topic, deviceID, err)
+		return payload
+	}
+	return signed
+}
+
 type simulator struct {
 	mu          sync.RWMutex
 	siteID      string
 	client      paho.Client
+	keys        deviceauth.Keys
 	relays      map[string]bool
 	batteryMode string
 	soc         float64
 	lowSOCOpen  bool
 }
 
-func newSimulator(siteID string) *simulator {
+func newSimulator(siteID string, keys deviceauth.Keys) *simulator {
 	return &simulator{
 		siteID:      siteID,
+		keys:        keys,
 		relays:      map[string]bool{"load_01": true, "load_02": true},
 		batteryMode: "idle",
 		soc:         0.65,
@@ -199,6 +223,7 @@ func (s *simulator) publishEvent(deviceID, severity, code, message string, seq i
 	}
 	payload, _ := json.Marshal(event)
 	t := "vpp/" + s.siteID + "/" + string(model.DeviceBattery) + "/" + deviceID + "/event"
+	payload = signPayload(t, deviceID, payload, s.keys)
 	token := s.client.Publish(t, 1, false, payload)
 	if token.Wait() && token.Error() != nil {
 		log.Printf("publish event failed topic=%s err=%v", t, token.Error())
@@ -254,6 +279,7 @@ func (s *simulator) handleCommand(_ paho.Client, msg paho.Message) {
 
 	payload, _ := json.Marshal(ack)
 	ackTopic := "vpp/" + s.siteID + "/" + parsed.DeviceType + "/" + parsed.DeviceID + "/command/ack"
+	payload = signPayload(ackTopic, parsed.DeviceID, payload, s.keys)
 	token := s.client.Publish(ackTopic, 1, false, payload)
 	token.Wait()
 	log.Printf("command device=%s action=%s ok=%v error=%s", parsed.DeviceID, cmd.Action, ack.OK, ack.Error)

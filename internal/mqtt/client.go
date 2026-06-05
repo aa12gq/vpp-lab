@@ -10,6 +10,7 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 
 	"vpp-lab/internal/config"
+	"vpp-lab/internal/deviceauth"
 	"vpp-lab/internal/model"
 	"vpp-lab/internal/state"
 	"vpp-lab/internal/timeseries"
@@ -22,6 +23,7 @@ type Client struct {
 	state    *state.Store
 	ts       *timeseries.Writer
 	recorder CommandRecorder
+	keys     deviceauth.Keys
 }
 
 type CommandRecorder interface {
@@ -40,6 +42,11 @@ func (c *Client) WithCommandRecorder(recorder CommandRecorder) *Client {
 }
 
 func (c *Client) Connect(ctx context.Context) error {
+	keys, err := deviceauth.ParseKeys(c.cfg.DeviceKeys)
+	if err != nil {
+		return err
+	}
+	c.keys = keys
 	opts := paho.NewClientOptions().
 		AddBroker(c.cfg.MQTTBroker).
 		SetClientID(c.cfg.MQTTClientID).
@@ -108,6 +115,12 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 	if !ok {
 		return
 	}
+	if requiresDeviceAuth(parsed.Kind) {
+		if err := deviceauth.VerifyPayload(msg.Topic(), parsed.DeviceID, msg.Payload(), c.keys, time.Now(), c.cfg.DeviceAuthMaxSkew); err != nil {
+			log.Printf("reject mqtt message topic=%s auth=%v", msg.Topic(), err)
+			return
+		}
+	}
 	switch parsed.Kind {
 	case "telemetry":
 		var tele model.Telemetry
@@ -171,6 +184,15 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 		log.Printf("device %s topic=%s payload=%s", parsed.DeviceID, parsed.Kind, string(msg.Payload()))
 	default:
 		log.Printf("ignored mqtt topic=%s", msg.Topic())
+	}
+}
+
+func requiresDeviceAuth(kind string) bool {
+	switch kind {
+	case "telemetry", "status", "event", "command/ack":
+		return true
+	default:
+		return false
 	}
 }
 

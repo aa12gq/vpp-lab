@@ -26,6 +26,8 @@ type Config struct {
 	RedisPassword     string
 	RedisDB           int
 	ControlToken      string
+	DeviceKeys        string
+	DeviceAuthMaxSkew time.Duration
 	SchedulerInterval time.Duration
 	BatteryMinSOC     float64
 	BatteryMaxSOC     float64
@@ -53,6 +55,8 @@ func Load() Config {
 		RedisPassword:     getenv("REDIS_PASSWORD", ""),
 		RedisDB:           getint("REDIS_DB", 0),
 		ControlToken:      getenv("CONTROL_TOKEN", ""),
+		DeviceKeys:        getenv("DEVICE_KEYS", ""),
+		DeviceAuthMaxSkew: getdur("DEVICE_AUTH_MAX_SKEW", 5*time.Minute),
 		SchedulerInterval: getdur("SCHEDULER_INTERVAL", 5*time.Second),
 		BatteryMinSOC:     getfloat("BATTERY_MIN_SOC", 0.25),
 		BatteryMaxSOC:     getfloat("BATTERY_MAX_SOC", 0.90),

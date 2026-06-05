@@ -80,6 +80,8 @@ go run ./cmd/vpp-lab
 
 MQTT 客户端 TLS 可通过 `MQTT_TLS_CA_FILE`、`MQTT_TLS_CERT_FILE`、`MQTT_TLS_KEY_FILE`、`MQTT_TLS_INSECURE_SKIP_VERIFY` 开启；edge-gateway 支持 `EDGE_LOCAL_TLS_*` 和 `EDGE_UPSTREAM_TLS_*` 分别覆盖本地/上游 broker。默认全部为空，仍使用本地明文 `tcp://` 连接。
 
+设备上行消息可开启 HMAC 签名校验。设置 `DEVICE_KEYS='pv_01=pv-secret,battery_01=battery-secret,load_01=load-secret,load_02=load2-secret'` 后，平台会校验 telemetry、event、status 和 command/ack；simulator 会用同一配置自动签名。`DEVICE_AUTH_MAX_SKEW` 默认 `5m`。不配置 `DEVICE_KEYS` 时校验关闭，保持当前本地实验体验。
+
 Redis 是可选增强。设置 `REDIS_ADDR=localhost:6379` 后，平台会缓存每台设备的最新遥测，服务重启后可恢复实时 summary；不设置时仍使用内存状态。
 
 本机调试时可另开终端启动模拟器：
