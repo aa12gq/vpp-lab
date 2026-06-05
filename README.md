@@ -35,6 +35,12 @@ docker compose ps
 make smoke
 ```
 
+内置控制台：
+
+```text
+http://localhost:8080/
+```
+
 如果只想本机调试 Go 服务：
 
 ```bash

@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VPP Lab Console</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171b1d;
+      --muted: #617078;
+      --line: #d8e0df;
+      --paper: #f7f8f3;
+      --panel: #ffffff;
+      --mint: #0f8c73;
+      --amber: #b76b16;
+      --red: #b93838;
+      --blue: #296fa8;
+      --shadow: 0 14px 34px rgba(34, 48, 52, .10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(23,27,29,.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(23,27,29,.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 32px 32px;
+      color: var(--ink);
+      font: 14px/1.5 "Avenir Next", "DIN Alternate", "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+
+    .shell {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 22px 0 34px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: end;
+      border-bottom: 2px solid var(--ink);
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 58px);
+      line-height: .9;
+      letter-spacing: 0;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin-top: 10px;
+      color: var(--muted);
+      max-width: 760px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .site-input {
+      width: 150px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: var(--ink);
+    }
+
+    .btn {
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: #fff;
+      border-radius: 6px;
+      min-height: 38px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .btn.secondary {
+      background: var(--panel);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+
+    .statusline {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--red);
+      display: inline-block;
+    }
+
+    .dot.ok { background: var(--mint); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .metric {
+      grid-column: span 3;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 15px;
+      min-height: 112px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: .08em;
+    }
+
+    .metric .value {
+      margin-top: 12px;
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 800;
+      font-family: "DIN Alternate", "Avenir Next", sans-serif;
+    }
+
+    .metric .unit { color: var(--muted); font-size: 13px; margin-left: 4px; }
+
+    .panel {
+      grid-column: span 6;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel.wide { grid-column: span 12; }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcf8;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .pill {
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 3px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      background: #fbfcf8;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 72px;
+    }
+
+    .tag {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .warn { color: var(--amber); }
+    .bad { color: var(--red); }
+    .good { color: var(--mint); }
+
+    .preview {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .preview-item {
+      border-left: 3px solid var(--line);
+      padding-left: 10px;
+      min-width: 0;
+    }
+
+    .preview-item b {
+      display: block;
+      font-size: 20px;
+      line-height: 1.1;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    .empty, .error {
+      padding: 16px;
+      color: var(--muted);
+    }
+
+    .error { color: var(--red); }
+
+    @media (max-width: 920px) {
+      .topbar { grid-template-columns: 1fr; }
+      .actions { justify-content: flex-start; }
+      .metric { grid-column: span 6; }
+      .panel { grid-column: span 12; }
+      .preview { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 560px) {
+      .shell { width: min(100vw - 20px, 1280px); padding-top: 14px; }
+      .metric { grid-column: span 12; min-height: 96px; }
+      .metric .value { font-size: 28px; }
+      .preview { grid-template-columns: 1fr; }
+      th, td { padding: 9px 8px; }
+      .hide-sm { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>VPP Lab</h1>
+        <div class="subtitle">本地虚拟电厂控制台：实时汇总站点功率、设备在线状态、命令回执和计划跟踪预览。</div>
+      </div>
+      <div class="actions">
+        <input id="site" class="site-input" value="home-lab" aria-label="site id">
+        <button id="refresh" class="btn" type="button">刷新</button>
+        <a class="btn secondary" href="/metrics">Metrics</a>
+      </div>
+    </header>
+
+    <section class="statusline">
+      <span id="health-dot" class="dot"></span>
+      <span id="health-text">checking</span>
+      <span id="updated">never</span>
+    </section>
+
+    <section class="grid">
+      <article class="metric">
+        <div class="label">PV Power</div>
+        <div class="value" id="pv">--<span class="unit">W</span></div>
+      </article>
+      <article class="metric">
+        <div class="label">Load Power</div>
+        <div class="value" id="load">--<span class="unit">W</span></div>
+      </article>
+      <article class="metric">
+        <div class="label">Battery</div>
+        <div class="value" id="battery">--<span class="unit">W</span></div>
+      </article>
+      <article class="metric">
+        <div class="label">Net Power</div>
+        <div class="value" id="net">--<span class="unit">W</span></div>
+      </article>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>设备状态</h2>
+          <span id="device-count" class="pill">0 devices</span>
+        </div>
+        <div id="devices"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>计划跟踪预览</h2>
+          <span id="dispatch-state" class="pill">preview only</span>
+        </div>
+        <div id="preview" class="preview"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>最近命令</h2>
+          <span id="command-count" class="pill">0 commands</span>
+        </div>
+        <div id="commands"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n, d = 1) => Number.isFinite(Number(n)) ? Number(n).toFixed(d) : "--";
+    const site = () => $("site").value.trim() || "home-lab";
+
+    async function getJSON(path) {
+      const res = await fetch(path, { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error(`${path} ${res.status}`);
+      return res.json();
+    }
+
+    function setMetric(id, value) {
+      $(id).innerHTML = `${fmt(value)}<span class="unit">W</span>`;
+      $(id).classList.toggle("bad", Number(value) > 100);
+    }
+
+    function renderDevices(rows) {
+      $("device-count").textContent = `${rows.length} devices`;
+      if (!rows.length) {
+        $("devices").innerHTML = `<div class="empty">No devices registered.</div>`;
+        return;
+      }
+      $("devices").innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Power</th>
+              <th>SOC</th>
+              <th class="hide-sm">State</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => {
+              const m = row.telemetry?.metrics || {};
+              const online = row.online ? "good" : "bad";
+              return `
+                <tr>
+                  <td title="${row.device.name}"><b>${row.device.id}</b></td>
+                  <td><span class="tag">${row.device.type}</span></td>
+                  <td><span class="state ${online}"><span class="dot ${row.online ? "ok" : ""}"></span>${row.online ? "online" : "offline"}</span></td>
+                  <td>${fmt(m.power)} W</td>
+                  <td>${m.soc === undefined ? "--" : fmt(m.soc * 100, 0) + "%"}</td>
+                  <td class="hide-sm">${row.telemetry?.state || "--"} · ${row.stale_for_sec}s</td>
+                </tr>`;
+            }).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    function renderPreview(preview) {
+      const cmd = preview.candidate_command;
+      $("dispatch-state").textContent = preview.safe_to_apply ? "ready" : "preview only";
+      $("preview").innerHTML = `
+        <div class="preview-item">Tracking Error<b>${fmt(preview.tracking_error_w)} W</b></div>
+        <div class="preview-item">Plan Action<b>${preview.current_slot?.battery_action || "--"}</b></div>
+        <div class="preview-item">Target Power<b>${fmt(preview.current_slot?.battery_power_w)} W</b></div>
+        <div class="preview-item">Candidate<b>${cmd ? `${preview.candidate_device_id} / ${cmd.action}` : "none"}</b></div>`;
+    }
+
+    function renderCommands(rows) {
+      const latest = rows.slice(0, 6);
+      $("command-count").textContent = `${rows.length} commands`;
+      if (!latest.length) {
+        $("commands").innerHTML = `<div class="empty">No command records yet.</div>`;
+        return;
+      }
+      $("commands").innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Action</th>
+              <th>Status</th>
+              <th class="hide-sm">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map((row) => `
+              <tr>
+                <td><b>${row.device_id}</b></td>
+                <td>${row.command?.action || "--"}</td>
+                <td class="${row.status === "failed" ? "bad" : "good"}">${row.status}</td>
+                <td class="hide-sm" title="${row.command?.reason || ""}">${row.command?.reason || "--"}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    async function refresh() {
+      $("refresh").disabled = true;
+      try {
+        const s = site();
+        const [health, summary, devices, preview, commands] = await Promise.all([
+          getJSON("/healthz"),
+          getJSON(`/api/v1/sites/${encodeURIComponent(s)}/summary`),
+          getJSON(`/api/v1/sites/${encodeURIComponent(s)}/device-states`),
+          getJSON(`/api/v1/sites/${encodeURIComponent(s)}/dispatch-preview`),
+          getJSON("/api/v1/commands"),
+        ]);
+        $("health-dot").classList.toggle("ok", health.status === "ok");
+        $("health-text").textContent = `health ${health.status} · mqtt ${health.checks?.mqtt || "unknown"} · postgres ${health.checks?.postgres || "unknown"} · state ${health.checks?.state || "unknown"}`;
+        $("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
+        setMetric("pv", summary.pv_power_w);
+        setMetric("load", summary.load_power_w);
+        setMetric("battery", summary.battery_power_w);
+        setMetric("net", summary.net_power_w);
+        renderDevices(devices);
+        renderPreview(preview);
+        renderCommands(commands);
+      } catch (err) {
+        $("health-dot").classList.remove("ok");
+        $("health-text").innerHTML = `<span class="error">${err.message}</span>`;
+      } finally {
+        $("refresh").disabled = false;
+      }
+    }
+
+    $("refresh").addEventListener("click", refresh);
+    $("site").addEventListener("change", refresh);
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

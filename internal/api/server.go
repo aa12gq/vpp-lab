@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -28,6 +29,9 @@ type HealthCheck struct {
 	Check func(context.Context) error
 }
 
+//go:embed ui/index.html
+var consoleHTML string
+
 type Server struct {
 	siteID    string
 	store     *state.Store
@@ -43,6 +47,7 @@ func New(siteID string, store *state.Store, sch *scheduler.Scheduler, publisher 
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /", s.console)
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /api/v1/devices", s.listDevices)
@@ -59,6 +64,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", s.command)
 	return withJSON(mux)
+}
+
+func (s *Server) console(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(consoleHTML))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +277,9 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 
 func withJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/healthz" {
+			w.Header().Set("Content-Type", "application/json")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
