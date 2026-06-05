@@ -13,6 +13,7 @@ need() {
 }
 
 need curl
+need docker
 need grep
 
 echo "checking edge healthz"
@@ -40,5 +41,9 @@ echo "$command_resp" | grep -q '"topic":"vpp/home-lab/load/load_02/command"' || 
 echo "$command_resp" | grep -q '"command_id":' || fail "local command missing command id: $command_resp"
 metrics="$(curl -fsS "$EDGE_BASE/metrics")" || fail "metrics request failed after local command"
 echo "$metrics" | grep -q 'vpp_edge_local_commands_total{status="accepted"} 1' || fail "local command accepted metric did not increment"
+
+echo "checking edge command ack capture"
+sleep 2
+docker compose --profile edge logs --tail=120 edge-gateway | grep -q 'command/ack' || fail "edge gateway did not capture command ack"
 
 echo "edge smoke ok"

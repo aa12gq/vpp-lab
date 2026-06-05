@@ -36,7 +36,7 @@ func main() {
 	cleanupInterval := getdur("EDGE_CLEANUP_INTERVAL", time.Hour)
 	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
 	controlToken := strings.TrimSpace(getenv("EDGE_CONTROL_TOKEN", ""))
-	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status"))
+	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status,command/ack"))
 	upstreamTopicPrefix := strings.Trim(getenv("EDGE_UPSTREAM_TOPIC_PREFIX", ""), "/")
 	localUsername := getenv("EDGE_LOCAL_USERNAME", getenv("MQTT_USERNAME", ""))
 	localPassword := getenv("EDGE_LOCAL_PASSWORD", getenv("MQTT_PASSWORD", ""))
@@ -90,11 +90,12 @@ func main() {
 	}
 	defer local.Disconnect(250)
 
-	subTopic := topic.Wildcard(siteID)
-	if token := local.Subscribe(subTopic, 1, nil); token.Wait() && token.Error() != nil {
-		log.Fatalf("subscribe local mqtt: %v", token.Error())
+	for _, subTopic := range edgeSubscribeTopics(siteID) {
+		if token := local.Subscribe(subTopic, 1, nil); token.Wait() && token.Error() != nil {
+			log.Fatalf("subscribe local mqtt topic=%s: %v", subTopic, token.Error())
+		}
 	}
-	log.Printf("edge gateway subscribed local=%s topic=%s cache=%s", localBroker, subTopic, cachePath)
+	log.Printf("edge gateway subscribed local=%s topics=%v cache=%s", localBroker, edgeSubscribeTopics(siteID), cachePath)
 
 	var upstream paho.Client
 	if upstreamBroker != "" {
@@ -418,6 +419,13 @@ func parseKindSet(raw string) map[string]bool {
 		out[kind] = true
 	}
 	return out
+}
+
+func edgeSubscribeTopics(siteID string) []string {
+	return []string{
+		topic.Wildcard(siteID),
+		topic.CommandAckWildcard(siteID),
+	}
 }
 
 func upstreamTopic(original string, prefix string) string {

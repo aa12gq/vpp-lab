@@ -8,8 +8,8 @@ import (
 )
 
 func TestParseKindSet(t *testing.T) {
-	kinds := parseKindSet("telemetry, event,status,")
-	for _, want := range []string{"telemetry", "event", "status"} {
+	kinds := parseKindSet("telemetry, event,status,command/ack,")
+	for _, want := range []string{"telemetry", "event", "status", "command/ack"} {
 		if !kinds[want] {
 			t.Fatalf("missing kind %s in %+v", want, kinds)
 		}
@@ -29,6 +29,19 @@ func TestUpstreamTopic(t *testing.T) {
 	}
 	if got := upstreamTopic("/"+topic, "/cloud/"); got != "cloud/"+topic {
 		t.Fatalf("unexpected normalized prefixed topic: %s", got)
+	}
+}
+
+func TestEdgeSubscribeTopics(t *testing.T) {
+	got := edgeSubscribeTopics("home-lab")
+	want := []string{"vpp/home-lab/+/+/+", "vpp/home-lab/+/+/command/ack"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected topic count: %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("topic %d mismatch: got %q want %q", i, got[i], want[i])
+		}
 	}
 }
 
