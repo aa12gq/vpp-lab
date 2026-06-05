@@ -182,7 +182,7 @@ Grafana：
 - Overview Dashboard: http://localhost:3000/d/vpp-lab-overview/vpp-lab-overview
 - Operations Dashboard: http://localhost:3000/d/vpp-lab-operations/vpp-lab-operations
 
-Operations Dashboard 包含设备在线、命令失败、设备事件计数和事件 severity 分布。
+Operations Dashboard 包含设备在线、命令失败、控制失败、设备事件计数、事件 severity 分布和审计操作分布。
 
 Prometheus：
 
