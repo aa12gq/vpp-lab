@@ -41,7 +41,25 @@ CREATE TABLE IF NOT EXISTS devices (
 	capacity_wh DOUBLE PRECISION NOT NULL DEFAULT 0,
 	critical_load BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-)`)
+);
+CREATE TABLE IF NOT EXISTS command_records (
+	command_id TEXT PRIMARY KEY,
+	site_id TEXT NOT NULL,
+	device_id TEXT NOT NULL,
+	device_type TEXT NOT NULL,
+	action TEXT NOT NULL,
+	params JSONB NOT NULL DEFAULT '{}'::jsonb,
+	reason TEXT NOT NULL DEFAULT '',
+	issued_at TIMESTAMPTZ NOT NULL,
+	status TEXT NOT NULL DEFAULT 'issued',
+	ack_ok BOOLEAN,
+	ack_error TEXT,
+	ack_timestamp TIMESTAMPTZ,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_command_records_updated_at ON command_records (updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_command_records_device_id ON command_records (device_id);
+`)
 	return err
 }
 

@@ -116,6 +116,15 @@ func (s *Store) PutCommandIssued(siteID string, d model.Device, cmd model.Comman
 	}
 }
 
+func (s *Store) SetCommands(commands []model.CommandRecord) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commands = append([]model.CommandRecord(nil), commands...)
+	if len(s.commands) > 200 {
+		s.commands = s.commands[:200]
+	}
+}
+
 func (s *Store) PutCommandAck(deviceID string, ack model.CommandAck) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -17,14 +17,25 @@ import (
 )
 
 type Client struct {
-	cfg    config.Config
-	client paho.Client
-	state  *state.Store
-	ts     *timeseries.Writer
+	cfg      config.Config
+	client   paho.Client
+	state    *state.Store
+	ts       *timeseries.Writer
+	recorder CommandRecorder
+}
+
+type CommandRecorder interface {
+	PutCommandIssued(ctx context.Context, siteID string, d model.Device, cmd model.Command) error
+	PutCommandAck(ctx context.Context, siteID string, deviceType model.DeviceType, deviceID string, ack model.CommandAck) error
 }
 
 func NewClient(cfg config.Config, store *state.Store, ts *timeseries.Writer) *Client {
 	return &Client{cfg: cfg, state: store, ts: ts}
+}
+
+func (c *Client) WithCommandRecorder(recorder CommandRecorder) *Client {
+	c.recorder = recorder
+	return c
 }
 
 func (c *Client) Connect(ctx context.Context) error {
@@ -71,6 +82,11 @@ func (c *Client) PublishCommand(siteID string, d model.Device, cmd model.Command
 		return token.Error()
 	}
 	c.state.PutCommandIssued(siteID, d, cmd)
+	if c.recorder != nil {
+		if err := c.recorder.PutCommandIssued(context.Background(), siteID, d, cmd); err != nil {
+			log.Printf("persist command issued failed command=%s err=%v", cmd.CommandID, err)
+		}
+	}
 	return nil
 }
 
@@ -105,6 +121,11 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 			return
 		}
 		c.state.PutCommandAck(parsed.DeviceID, ack)
+		if c.recorder != nil {
+			if err := c.recorder.PutCommandAck(context.Background(), parsed.SiteID, model.DeviceType(parsed.DeviceType), parsed.DeviceID, ack); err != nil {
+				log.Printf("persist command ack failed command=%s err=%v", ack.CommandID, err)
+			}
+		}
 		log.Printf("command ack topic=%s payload=%s", msg.Topic(), string(msg.Payload()))
 	case "command":
 		return

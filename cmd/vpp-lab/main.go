@@ -34,11 +34,14 @@ func main() {
 	if err := loadOrSeedDevices(ctx, cfg.SiteID, devRepo, store); err != nil {
 		log.Fatalf("load devices: %v", err)
 	}
+	if err := loadRecentCommands(ctx, devRepo, store); err != nil {
+		log.Fatalf("load commands: %v", err)
+	}
 
 	ts := timeseries.NewWriter(cfg.InfluxURL, cfg.InfluxToken, cfg.InfluxOrg, cfg.InfluxBucket)
 	defer ts.Close()
 
-	mqttClient := vppmqtt.NewClient(cfg, store, ts)
+	mqttClient := vppmqtt.NewClient(cfg, store, ts).WithCommandRecorder(devRepo)
 	if err := mqttClient.Connect(ctx); err != nil {
 		log.Fatalf("connect mqtt: %v", err)
 	}
@@ -67,6 +70,15 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
+}
+
+func loadRecentCommands(ctx context.Context, repo *repository.DeviceRepository, store *state.Store) error {
+	commands, err := repo.ListCommands(ctx, 200)
+	if err != nil {
+		return err
+	}
+	store.SetCommands(commands)
+	return nil
 }
 
 func loadOrSeedDevices(ctx context.Context, siteID string, repo *repository.DeviceRepository, store *state.Store) error {

@@ -13,6 +13,7 @@
 - PostgreSQL 设备元信息
 - Go HTTP API
 - Go 实时规则调度
+- PostgreSQL 命令审计
 - 设备模拟器
 - ESP32 Arduino 固件模板
 - Grafana 数据源自动配置
@@ -41,6 +42,8 @@ curl http://localhost:8080/api/v1/sites/home-lab/plan
 curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 curl http://localhost:8080/api/v1/commands
 ```
+
+`/api/v1/commands` 返回最近 200 条命令记录。命令下发和设备回执会写入 PostgreSQL，服务重启后仍可查询。
 
 生成自定义日前计划：
 

@@ -61,6 +61,17 @@ ESP32/simulator
 HTTP API / seed data -> PostgreSQL -> memory state
 ```
 
+命令审计：
+
+```text
+API / scheduler / dispatch apply
+  -> MQTT command
+  -> memory command state
+  -> PostgreSQL command_records
+  -> MQTT command/ack
+  -> memory + PostgreSQL ack update
+```
+
 ## 调度策略
 
 实时调度周期默认 5 秒。

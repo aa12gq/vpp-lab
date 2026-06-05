@@ -36,6 +36,7 @@
 
 - MQTT TLS
 - 每设备唯一密钥
+- 命令审计持久化：已完成
 - 操作审计
 - Redis 实时状态
 - Prometheus 指标
