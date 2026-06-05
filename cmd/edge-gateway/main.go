@@ -17,6 +17,7 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 
 	"vpp-lab/internal/edge"
+	"vpp-lab/internal/model"
 	vppmqtt "vpp-lab/internal/mqtt"
 	"vpp-lab/internal/topic"
 )
@@ -33,6 +34,7 @@ func main() {
 	cacheRetention := getdur("EDGE_CACHE_RETENTION", 24*time.Hour)
 	cleanupInterval := getdur("EDGE_CLEANUP_INTERVAL", time.Hour)
 	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
+	controlToken := strings.TrimSpace(getenv("EDGE_CONTROL_TOKEN", ""))
 	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status"))
 	upstreamTopicPrefix := strings.Trim(getenv("EDGE_UPSTREAM_TOPIC_PREFIX", ""), "/")
 	localUsername := getenv("EDGE_LOCAL_USERNAME", getenv("MQTT_USERNAME", ""))
@@ -108,7 +110,7 @@ func main() {
 
 	httpSrv := &http.Server{
 		Addr:              httpAddr,
-		Handler:           edgeHTTPHandler(cache, local, upstream, cacheRetention),
+		Handler:           edgeHTTPHandler(cache, local, upstream, cacheRetention, siteID, controlToken),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -124,7 +126,7 @@ func main() {
 	_ = httpSrv.Shutdown(shutdownCtx)
 }
 
-func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client, cacheRetention time.Duration) http.Handler {
+func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client, cacheRetention time.Duration, siteID string, controlToken string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusOK
@@ -147,6 +149,46 @@ func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client,
 			return
 		}
 		writeJSON(w, http.StatusOK, stats)
+	})
+	mux.HandleFunc("POST /api/v1/local-command", func(w http.ResponseWriter, r *http.Request) {
+		if !edgeAuthorized(r, controlToken) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "edge control token required"})
+			return
+		}
+		if local == nil || !local.IsConnected() {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "local mqtt disconnected"})
+			return
+		}
+		req, err := decodeLocalCommand(r)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if req.SiteID == "" {
+			req.SiteID = siteID
+		}
+		cmd := model.Command{
+			CommandID: req.DeviceID + "-" + time.Now().Format("20060102150405.000000000"),
+			Action:    req.Action,
+			Params:    req.Params,
+			IssuedAt:  time.Now().Unix(),
+			Reason:    "edge local: " + req.Reason,
+		}
+		payload, err := json.Marshal(cmd)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		targetTopic := topic.Command(req.SiteID, req.DeviceType, req.DeviceID)
+		token := local.Publish(targetTopic, 1, false, payload)
+		if token.Wait() && token.Error() != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": token.Error().Error()})
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]interface{}{
+			"topic":   targetTopic,
+			"command": cmd,
+		})
 	})
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
 		stats, err := cache.Stats(r.Context())
@@ -177,6 +219,54 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+type localCommandRequest struct {
+	SiteID     string                 `json:"site_id"`
+	DeviceType string                 `json:"device_type"`
+	DeviceID   string                 `json:"device_id"`
+	Action     string                 `json:"action"`
+	Params     map[string]interface{} `json:"params,omitempty"`
+	Reason     string                 `json:"reason,omitempty"`
+}
+
+func decodeLocalCommand(r *http.Request) (localCommandRequest, error) {
+	var req localCommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return localCommandRequest{}, err
+	}
+	req.SiteID = strings.TrimSpace(req.SiteID)
+	req.DeviceType = strings.TrimSpace(req.DeviceType)
+	req.DeviceID = strings.TrimSpace(req.DeviceID)
+	req.Action = strings.TrimSpace(req.Action)
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.DeviceType == "" || req.DeviceID == "" || req.Action == "" {
+		return localCommandRequest{}, fmt.Errorf("device_type, device_id and action are required")
+	}
+	if req.Params == nil {
+		req.Params = map[string]interface{}{}
+	}
+	return req, nil
+}
+
+func edgeAuthorized(r *http.Request, token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return true
+	}
+	got := strings.TrimSpace(r.Header.Get("X-VPP-Edge-Token"))
+	if got == "" {
+		got = bearerToken(r.Header.Get("Authorization"))
+	}
+	return got == token
+}
+
+func bearerToken(header string) string {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }
 
 func boolFloat(ok bool) float64 {

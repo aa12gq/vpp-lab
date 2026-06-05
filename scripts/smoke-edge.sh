@@ -31,4 +31,11 @@ echo "$metrics" | grep -q 'vpp_edge_cache_messages{state="pending"}' || fail "mi
 echo "$metrics" | grep -q 'vpp_edge_cache_oldest_pending_age_seconds' || fail "missing oldest pending age metric"
 echo "$metrics" | grep -q 'vpp_edge_mqtt_connected{side="local"} 1' || fail "missing local mqtt connected metric"
 
+echo "checking edge local command"
+command_resp="$(curl -fsS -X POST "$EDGE_BASE/api/v1/local-command" \
+	-H 'Content-Type: application/json' \
+	-d '{"device_type":"load","device_id":"load_02","action":"set_relay","params":{"on":true},"reason":"edge smoke"}')" || fail "local command request failed"
+echo "$command_resp" | grep -q '"topic":"vpp/home-lab/load/load_02/command"' || fail "unexpected local command response: $command_resp"
+echo "$command_resp" | grep -q '"command_id":' || fail "local command missing command id: $command_resp"
+
 echo "edge smoke ok"
