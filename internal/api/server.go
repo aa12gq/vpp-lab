@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"vpp-lab/internal/dispatch"
 	"vpp-lab/internal/model"
 	"vpp-lab/internal/optimizer"
 	"vpp-lab/internal/scheduler"
@@ -41,6 +42,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/summary", s.summary)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/plan", s.plan)
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/plan", s.customPlan)
+	mux.HandleFunc("GET /api/v1/sites/{site_id}/dispatch-preview", s.dispatchPreview)
+	mux.HandleFunc("POST /api/v1/sites/{site_id}/dispatch-preview", s.customDispatchPreview)
 	mux.HandleFunc("GET /api/v1/commands", s.commands)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
@@ -109,6 +112,27 @@ func (s *Server) customPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, optimizer.BuildDayAheadPlan(time.Now(), s.store.Summary(siteID), cfg))
+}
+
+func (s *Server) dispatchPreview(w http.ResponseWriter, r *http.Request) {
+	siteID := r.PathValue("site_id")
+	if siteID == "" {
+		siteID = s.siteID
+	}
+	writeJSON(w, http.StatusOK, dispatch.BuildPreview(time.Now(), s.store.Summary(siteID), s.store.Devices(), optimizer.DefaultConfig()))
+}
+
+func (s *Server) customDispatchPreview(w http.ResponseWriter, r *http.Request) {
+	siteID := r.PathValue("site_id")
+	if siteID == "" {
+		siteID = s.siteID
+	}
+	var cfg optimizer.Config
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, dispatch.BuildPreview(time.Now(), s.store.Summary(siteID), s.store.Devices(), cfg))
 }
 
 func (s *Server) commands(w http.ResponseWriter, _ *http.Request) {

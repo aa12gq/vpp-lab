@@ -79,6 +79,13 @@ HTTP API / seed data -> PostgreSQL -> memory state
 - 输出预测光伏、预测负载、建议充放电动作、目标功率、预测 SOC
 - 当前只作为建议计划，不直接驱动设备控制
 
+计划跟踪预览：
+
+- 将当前实时状态和日前计划当前时隙对齐
+- 计算实时净负荷与计划净负荷偏差
+- 生成候选控制命令
+- 默认 `safe_to_apply=false`，避免预览逻辑直接误控设备
+
 ## 阶段 5 扩展点
 
 - `internal/state` 替换为 Redis

@@ -38,6 +38,7 @@ curl http://localhost:8080/healthz
 curl http://localhost:8080/api/v1/devices
 curl http://localhost:8080/api/v1/sites/home-lab/summary
 curl http://localhost:8080/api/v1/sites/home-lab/plan
+curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 curl http://localhost:8080/api/v1/commands
 ```
 
@@ -63,6 +64,21 @@ curl -X POST http://localhost:8080/api/v1/sites/home-lab/plan \
 ```
 
 计划输出包含每个 15 分钟时隙的预测光伏、预测负载、电价、建议电池动作、目标功率和预测 SOC。当前它只生成建议，不直接控制设备；实时控制仍由规则调度器负责。
+
+查看当前时隙的计划跟踪预览：
+
+```bash
+curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
+```
+
+它会把当前实时状态和日前计划当前时隙对齐，输出：
+
+- 当前时隙计划
+- 实时净负荷和计划净负荷偏差
+- 候选控制命令
+- `safe_to_apply=false`
+
+`safe_to_apply=false` 表示当前只是调度建议，不会自动下发到设备。
 
 Grafana：
 

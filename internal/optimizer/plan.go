@@ -46,6 +46,15 @@ type Plan struct {
 	Slots       []Slot    `json:"slots"`
 }
 
+func CurrentSlot(plan Plan, at time.Time) (Slot, bool) {
+	for _, slot := range plan.Slots {
+		if (at.Equal(slot.StartAt) || at.After(slot.StartAt)) && at.Before(slot.EndAt) {
+			return slot, true
+		}
+	}
+	return Slot{}, false
+}
+
 func DefaultConfig() Config {
 	return Config{
 		HorizonHours:       24,
@@ -88,6 +97,9 @@ func BuildDayAheadPlan(now time.Time, summary model.SiteSummary, cfg Config) Pla
 	for i := 0; i < slotCount; i++ {
 		slotStart := start.Add(time.Duration(i*cfg.SlotMinutes) * time.Minute)
 		price := priceAt(slotStart, cfg.Tariffs)
+		low := lowPrice(cfg.Tariffs)
+		high := highPrice(cfg.Tariffs)
+		hasArbitrage := high > low
 		pv := forecastPV(slotStart, currentPV)
 		load := forecastLoad(slotStart, currentLoad)
 		netLoad := load - pv
@@ -101,11 +113,11 @@ func BuildDayAheadPlan(now time.Time, summary model.SiteSummary, cfg Config) Pla
 			mode = "charge"
 			target = math.Min(cfg.BatteryPowerLimitW, pv-load)
 			reason = "pv surplus"
-		case price <= lowPrice(cfg.Tariffs) && soc < cfg.MaxSOC:
+		case hasArbitrage && price <= low && soc < cfg.MaxSOC:
 			mode = "charge"
 			target = cfg.BatteryPowerLimitW
 			reason = "low tariff"
-		case price >= highPrice(cfg.Tariffs) && netLoad > 0 && soc > cfg.MinSOC:
+		case hasArbitrage && price >= high && netLoad > 0 && soc > cfg.MinSOC:
 			mode = "discharge"
 			target = math.Min(cfg.BatteryPowerLimitW, netLoad)
 			reason = "peak tariff and load deficit"
