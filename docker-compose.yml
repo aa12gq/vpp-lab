@@ -109,6 +109,7 @@ services:
       MQTT_BROKER: tcp://emqx:1883
       INFLUX_URL: http://influxdb:8086
       POSTGRES_DSN: postgres://vpp:vpp@postgres:5432/vpp?sslmode=disable
+      REDIS_ADDR: redis:6379
     ports:
       - "8080:8080"
     restart: on-failure
@@ -123,6 +124,8 @@ services:
       influxdb:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   simulator:

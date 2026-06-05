@@ -18,6 +18,9 @@ type Config struct {
 	InfluxOrg         string
 	InfluxBucket      string
 	PostgresDSN       string
+	RedisAddr         string
+	RedisPassword     string
+	RedisDB           int
 	SchedulerInterval time.Duration
 	BatteryMinSOC     float64
 	BatteryMaxSOC     float64
@@ -37,6 +40,9 @@ func Load() Config {
 		InfluxOrg:         getenv("INFLUX_ORG", "vpp-lab"),
 		InfluxBucket:      getenv("INFLUX_BUCKET", "vpp"),
 		PostgresDSN:       getenv("POSTGRES_DSN", "postgres://vpp:vpp@localhost:5432/vpp?sslmode=disable"),
+		RedisAddr:         getenv("REDIS_ADDR", ""),
+		RedisPassword:     getenv("REDIS_PASSWORD", ""),
+		RedisDB:           getint("REDIS_DB", 0),
 		SchedulerInterval: getdur("SCHEDULER_INTERVAL", 5*time.Second),
 		BatteryMinSOC:     getfloat("BATTERY_MIN_SOC", 0.25),
 		BatteryMaxSOC:     getfloat("BATTERY_MAX_SOC", 0.90),
@@ -73,4 +79,16 @@ func getfloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	return f
+}
+
+func getint(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return i
 }

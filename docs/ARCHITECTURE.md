@@ -115,10 +115,11 @@ API / scheduler / dispatch apply
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
 - Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态
+- `internal/state` 支持可选 Redis 后端，缓存每台设备最新遥测，服务重启后恢复实时 summary
 
 ## 阶段 5 扩展点
 
-- `internal/state` 替换为 Redis
+- Redis 状态缓存扩展为多实例共享状态、过期策略和状态变更事件
 - `internal/mqtt` 增加 TLS、用户名密码、设备证书
 - `internal/scheduler` 拆成独立服务
 - `internal/optimizer` 替换为 Python gRPC 优化服务

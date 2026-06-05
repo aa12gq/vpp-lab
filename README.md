@@ -14,6 +14,7 @@
 - Go HTTP API
 - Go 实时规则调度
 - PostgreSQL 命令审计
+- Redis 最新遥测状态缓存
 - 设备模拟器
 - ESP32 Arduino 固件模板
 - Grafana 数据源自动配置
@@ -40,7 +41,9 @@ docker compose up -d emqx influxdb postgres redis grafana
 go run ./cmd/vpp-lab
 ```
 
-说明：`.env` 默认服务地址适合本机 `go run`；`docker-compose.yml` 会为容器化 `app` 覆盖为 `emqx/influxdb/postgres` 这些 Compose 服务名。
+说明：`.env` 默认服务地址适合本机 `go run`；`docker-compose.yml` 会为容器化 `app` 覆盖为 `emqx/influxdb/postgres/redis` 这些 Compose 服务名。
+
+Redis 是可选增强。设置 `REDIS_ADDR=localhost:6379` 后，平台会缓存每台设备的最新遥测，服务重启后可恢复实时 summary；不设置时仍使用内存状态。
 
 本机调试时可另开终端启动模拟器：
 

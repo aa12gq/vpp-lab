@@ -23,7 +23,15 @@ func main() {
 	defer stop()
 
 	cfg := config.Load()
-	store := state.NewStore()
+	store, err := newStateStore(ctx, cfg)
+	if err != nil {
+		log.Fatalf("init state store: %v", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("close state store: %v", err)
+		}
+	}()
 
 	devRepo, err := repository.NewDeviceRepository(ctx, cfg.PostgresDSN)
 	if err != nil {
@@ -70,6 +78,22 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
+}
+
+func newStateStore(ctx context.Context, cfg config.Config) (*state.Store, error) {
+	if cfg.RedisAddr == "" {
+		return state.NewStore(), nil
+	}
+	store, err := state.NewRedisStore(ctx, cfg.SiteID, state.RedisOptions{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("redis state store enabled addr=%s db=%d", cfg.RedisAddr, cfg.RedisDB)
+	return store, nil
 }
 
 func loadRecentCommands(ctx context.Context, repo *repository.DeviceRepository, store *state.Store) error {

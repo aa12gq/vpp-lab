@@ -1,8 +1,14 @@
 package state
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"vpp-lab/internal/model"
 )
@@ -12,6 +18,8 @@ type Store struct {
 	devices   map[string]model.Device
 	telemetry map[string]model.Telemetry
 	commands  []model.CommandRecord
+	redis     *redis.Client
+	redisKey  string
 }
 
 func NewStore() *Store {
@@ -20,6 +28,42 @@ func NewStore() *Store {
 		telemetry: make(map[string]model.Telemetry),
 		commands:  make([]model.CommandRecord, 0, 200),
 	}
+}
+
+func NewRedisStore(ctx context.Context, siteID string, opts RedisOptions) (*Store, error) {
+	store := NewStore()
+	client := redis.NewClient(&redis.Options{
+		Addr:         opts.Addr,
+		Password:     opts.Password,
+		DB:           opts.DB,
+		DialTimeout:  2 * time.Second,
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 1 * time.Second,
+	})
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+	store.redis = client
+	store.redisKey = telemetryKey(siteID)
+	if err := store.loadTelemetry(ctx); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+	return store, nil
+}
+
+type RedisOptions struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
+func (s *Store) Close() error {
+	if s.redis == nil {
+		return nil
+	}
+	return s.redis.Close()
 }
 
 func (s *Store) UpsertDevice(d model.Device) {
@@ -50,8 +94,9 @@ func (s *Store) Device(id string) (model.Device, bool) {
 
 func (s *Store) PutTelemetry(t model.Telemetry) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.telemetry[t.DeviceID] = t
+	s.mu.Unlock()
+	s.persistTelemetry(t)
 }
 
 func (s *Store) Telemetry() map[string]model.Telemetry {
@@ -148,4 +193,45 @@ func (s *Store) Commands() []model.CommandRecord {
 	out := make([]model.CommandRecord, len(s.commands))
 	copy(out, s.commands)
 	return out
+}
+
+func (s *Store) loadTelemetry(ctx context.Context) error {
+	values, err := s.redis.HGetAll(ctx, s.redisKey).Result()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for deviceID, raw := range values {
+		var t model.Telemetry
+		if err := json.Unmarshal([]byte(raw), &t); err != nil {
+			log.Printf("skip bad redis telemetry device=%s err=%v", deviceID, err)
+			continue
+		}
+		if t.DeviceID == "" {
+			t.DeviceID = deviceID
+		}
+		s.telemetry[t.DeviceID] = t
+	}
+	return nil
+}
+
+func (s *Store) persistTelemetry(t model.Telemetry) {
+	if s.redis == nil {
+		return
+	}
+	payload, err := json.Marshal(t)
+	if err != nil {
+		log.Printf("marshal telemetry failed device=%s err=%v", t.DeviceID, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := s.redis.HSet(ctx, s.redisKey, t.DeviceID, payload).Err(); err != nil {
+		log.Printf("persist redis telemetry failed device=%s err=%v", t.DeviceID, err)
+	}
+}
+
+func telemetryKey(siteID string) string {
+	return fmt.Sprintf("vpp:%s:latest_telemetry", siteID)
 }
