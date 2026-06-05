@@ -40,6 +40,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/devices", s.upsertDevice)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/summary", s.summary)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/plan", s.plan)
+	mux.HandleFunc("GET /api/v1/commands", s.commands)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", s.command)
@@ -94,6 +95,10 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 		siteID = s.siteID
 	}
 	writeJSON(w, http.StatusOK, optimizer.BuildSimpleDayPlan(time.Now(), s.store.Summary(siteID)))
+}
+
+func (s *Server) commands(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.store.Commands())
 }
 
 func (s *Server) getPolicy(w http.ResponseWriter, _ *http.Request) {

@@ -24,6 +24,10 @@ func Wildcard(siteID string) string {
 	return fmt.Sprintf("vpp/%s/+/+/+", siteID)
 }
 
+func CommandAckWildcard(siteID string) string {
+	return fmt.Sprintf("vpp/%s/+/+/command/ack", siteID)
+}
+
 func Parse(t string) (Parsed, bool) {
 	parts := strings.Split(t, "/")
 	if len(parts) < 5 || parts[0] != "vpp" {

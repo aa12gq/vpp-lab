@@ -11,12 +11,14 @@ type Store struct {
 	mu        sync.RWMutex
 	devices   map[string]model.Device
 	telemetry map[string]model.Telemetry
+	commands  []model.CommandRecord
 }
 
 func NewStore() *Store {
 	return &Store{
 		devices:   make(map[string]model.Device),
 		telemetry: make(map[string]model.Telemetry),
+		commands:  make([]model.CommandRecord, 0, 200),
 	}
 }
 
@@ -96,4 +98,45 @@ func (s *Store) Summary(siteID string) model.SiteSummary {
 	}
 	summary.NetPowerW = summary.LoadPowerW - summary.PVPowerW - summary.BatteryPower
 	return summary
+}
+
+func (s *Store) PutCommandIssued(siteID string, d model.Device, cmd model.Command) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commands = append([]model.CommandRecord{{
+		SiteID:     siteID,
+		DeviceID:   d.ID,
+		DeviceType: d.Type,
+		Command:    cmd,
+		Status:     "issued",
+		UpdatedAt:  time.Now(),
+	}}, s.commands...)
+	if len(s.commands) > 200 {
+		s.commands = s.commands[:200]
+	}
+}
+
+func (s *Store) PutCommandAck(deviceID string, ack model.CommandAck) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.commands {
+		if s.commands[i].DeviceID == deviceID && s.commands[i].Command.CommandID == ack.CommandID {
+			s.commands[i].Ack = &ack
+			if ack.OK {
+				s.commands[i].Status = "acked"
+			} else {
+				s.commands[i].Status = "failed"
+			}
+			s.commands[i].UpdatedAt = time.Now()
+			return
+		}
+	}
+}
+
+func (s *Store) Commands() []model.CommandRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]model.CommandRecord, len(s.commands))
+	copy(out, s.commands)
+	return out
 }

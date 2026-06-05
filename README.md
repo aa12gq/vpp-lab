@@ -38,6 +38,7 @@ curl http://localhost:8080/healthz
 curl http://localhost:8080/api/v1/devices
 curl http://localhost:8080/api/v1/sites/home-lab/summary
 curl http://localhost:8080/api/v1/sites/home-lab/plan
+curl http://localhost:8080/api/v1/commands
 ```
 
 Grafana：
@@ -58,6 +59,21 @@ EMQX Dashboard：
 curl -X POST http://localhost:8080/api/v1/devices/load_02/command \
   -H 'Content-Type: application/json' \
   -d '{"action":"set_relay","params":{"on":false},"reason":"manual test"}'
+```
+
+如果 simulator 正在运行，它会订阅命令、修改本地状态并发布 `command/ack`。验证：
+
+```bash
+curl http://localhost:8080/api/v1/commands
+curl http://localhost:8080/api/v1/sites/home-lab/summary
+```
+
+重新打开负载：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/devices/load_02/command \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"set_relay","params":{"on":true},"reason":"manual restore"}'
 ```
 
 ## 注册设备

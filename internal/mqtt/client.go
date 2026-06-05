@@ -35,12 +35,15 @@ func (c *Client) Connect(ctx context.Context) error {
 		SetConnectRetry(true).
 		SetConnectRetryInterval(2 * time.Second).
 		SetOnConnectHandler(func(client paho.Client) {
-			t := topic.Wildcard(c.cfg.SiteID)
-			if token := client.Subscribe(t, 1, c.handleMessage); token.Wait() && token.Error() != nil {
-				log.Printf("mqtt subscribe failed: %v", token.Error())
-			} else {
-				log.Printf("mqtt subscribed: %s", t)
+			topics := map[string]byte{
+				topic.Wildcard(c.cfg.SiteID):           1,
+				topic.CommandAckWildcard(c.cfg.SiteID): 1,
 			}
+			if token := client.SubscribeMultiple(topics, c.handleMessage); token.Wait() && token.Error() != nil {
+				log.Printf("mqtt subscribe failed: %v", token.Error())
+				return
+			}
+			log.Printf("mqtt subscribed: %v", topics)
 		})
 	if c.cfg.MQTTUsername != "" {
 		opts.SetUsername(c.cfg.MQTTUsername).SetPassword(c.cfg.MQTTPassword)
@@ -67,6 +70,7 @@ func (c *Client) PublishCommand(siteID string, d model.Device, cmd model.Command
 	if token.Wait() && token.Error() != nil {
 		return token.Error()
 	}
+	c.state.PutCommandIssued(siteID, d, cmd)
 	return nil
 }
 
@@ -95,7 +99,15 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 			}
 		}
 	case "command/ack":
+		var ack model.CommandAck
+		if err := json.Unmarshal(msg.Payload(), &ack); err != nil {
+			log.Printf("bad command ack topic=%s err=%v", msg.Topic(), err)
+			return
+		}
+		c.state.PutCommandAck(parsed.DeviceID, ack)
 		log.Printf("command ack topic=%s payload=%s", msg.Topic(), string(msg.Payload()))
+	case "command":
+		return
 	case "status", "event":
 		log.Printf("device %s topic=%s payload=%s", parsed.DeviceID, parsed.Kind, string(msg.Payload()))
 	default:

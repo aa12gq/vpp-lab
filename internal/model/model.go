@@ -46,6 +46,16 @@ type CommandAck struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
+type CommandRecord struct {
+	SiteID     string      `json:"site_id"`
+	DeviceID   string      `json:"device_id"`
+	DeviceType DeviceType  `json:"device_type"`
+	Command    Command     `json:"command"`
+	Status     string      `json:"status"`
+	Ack        *CommandAck `json:"ack,omitempty"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+}
+
 type SiteSummary struct {
 	SiteID       string    `json:"site_id"`
 	PVPowerW     float64   `json:"pv_power_w"`

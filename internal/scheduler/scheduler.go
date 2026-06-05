@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -19,6 +20,8 @@ type Scheduler struct {
 	store     *state.Store
 	commander Commander
 	policy    model.Policy
+	lastSent  map[string]time.Time
+	cooldown  time.Duration
 }
 
 func New(siteID string, store *state.Store, commander Commander, policy model.Policy) *Scheduler {
@@ -27,6 +30,8 @@ func New(siteID string, store *state.Store, commander Commander, policy model.Po
 		store:     store,
 		commander: commander,
 		policy:    policy,
+		lastSent:  make(map[string]time.Time),
+		cooldown:  30 * time.Second,
 	}
 }
 
@@ -101,6 +106,10 @@ func (s *Scheduler) SetPolicy(p model.Policy) {
 }
 
 func (s *Scheduler) publish(_ context.Context, d model.Device, action, reason string, params map[string]interface{}) {
+	key := commandKey(d.ID, action, params)
+	if last, ok := s.lastSent[key]; ok && time.Since(last) < s.cooldown {
+		return
+	}
 	cmd := model.Command{
 		CommandID: fmt.Sprintf("%s-%d", d.ID, time.Now().UnixNano()),
 		Action:    action,
@@ -112,5 +121,11 @@ func (s *Scheduler) publish(_ context.Context, d model.Device, action, reason st
 		log.Printf("publish command failed device=%s action=%s err=%v", d.ID, action, err)
 		return
 	}
+	s.lastSent[key] = time.Now()
 	log.Printf("scheduler command device=%s action=%s reason=%q", d.ID, action, reason)
+}
+
+func commandKey(deviceID, action string, params map[string]interface{}) string {
+	payload, _ := json.Marshal(params)
+	return deviceID + ":" + action + ":" + string(payload)
 }
