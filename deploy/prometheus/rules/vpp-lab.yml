@@ -28,3 +28,21 @@ groups:
         annotations:
           summary: "VPP high net load"
           description: "Net load at site {{ $labels.site_id }} is above 100W for more than 30 seconds."
+
+      - alert: VPPDeviceWarningEvent
+        expr: vpp_device_events_total{severity="warning"} > 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: "VPP device warning event"
+          description: "Recent device event history contains warning events at site {{ $labels.site_id }}."
+
+      - alert: VPPDeviceCriticalEvent
+        expr: vpp_device_events_total{severity="critical"} > 0
+        for: 5s
+        labels:
+          severity: critical
+        annotations:
+          summary: "VPP device critical event"
+          description: "Recent device event history contains critical events at site {{ $labels.site_id }}."

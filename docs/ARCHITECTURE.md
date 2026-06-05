@@ -107,10 +107,10 @@ API / scheduler / dispatch apply
 监控指标：
 
 - `/metrics` 输出 Prometheus 文本格式
-- 包含站点功率、平均 SOC、设备在线状态、设备遥测和命令状态计数
+- 包含站点功率、平均 SOC、设备在线状态、设备遥测、命令状态计数和设备事件计数
 - 设备在线状态基于最近遥测时间计算，默认 30 秒内视为在线
 - Docker Compose 内置 Prometheus，默认抓取 `app:8080/metrics`
-- Prometheus 内置基础规则：设备离线、命令失败、净负荷过高
+- Prometheus 内置基础规则：设备离线、命令失败、净负荷过高、设备 warning/critical 事件
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
