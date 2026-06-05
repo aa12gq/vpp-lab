@@ -39,10 +39,16 @@ type Server struct {
 	publisher CommandPublisher
 	devices   DeviceSaver
 	checks    []HealthCheck
+	token     string
 }
 
 func New(siteID string, store *state.Store, sch *scheduler.Scheduler, publisher CommandPublisher, devices DeviceSaver, checks ...HealthCheck) *Server {
 	return &Server{siteID: siteID, store: store, scheduler: sch, publisher: publisher, devices: devices, checks: checks}
+}
+
+func (s *Server) WithControlToken(token string) *Server {
+	s.token = strings.TrimSpace(token)
+	return s
 }
 
 func (s *Server) Handler() http.Handler {
@@ -110,6 +116,9 @@ func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) upsertDevice(w http.ResponseWriter, r *http.Request) {
+	if !s.requireControl(w, r) {
+		return
+	}
 	var d model.Device
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -194,6 +203,9 @@ func (s *Server) customDispatchPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) applyDispatch(w http.ResponseWriter, r *http.Request) {
+	if !s.requireControl(w, r) {
+		return
+	}
 	siteID := r.PathValue("site_id")
 	if siteID == "" {
 		siteID = s.siteID
@@ -241,6 +253,9 @@ func (s *Server) getPolicy(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) setPolicy(w http.ResponseWriter, r *http.Request) {
+	if !s.requireControl(w, r) {
+		return
+	}
 	var p model.Policy
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -251,6 +266,9 @@ func (s *Server) setPolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) command(w http.ResponseWriter, r *http.Request) {
+	if !s.requireControl(w, r) {
+		return
+	}
 	deviceID := r.PathValue("device_id")
 	d, ok := s.store.Device(deviceID)
 	if !ok {
@@ -291,4 +309,27 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 
 func writeError(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func (s *Server) requireControl(w http.ResponseWriter, r *http.Request) bool {
+	if s.token == "" {
+		return true
+	}
+	token := strings.TrimSpace(r.Header.Get("X-VPP-Control-Token"))
+	if token == "" {
+		token = bearerToken(r.Header.Get("Authorization"))
+	}
+	if token == s.token {
+		return true
+	}
+	writeError(w, http.StatusUnauthorized, "control token required")
+	return false
+}
+
+func bearerToken(header string) string {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }

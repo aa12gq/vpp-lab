@@ -64,7 +64,7 @@ func main() {
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(cfg.SiteID, store, sch, mqttClient, devRepo, healthChecks(store, mqttClient, devRepo)...).Handler(),
+		Handler:           api.New(cfg.SiteID, store, sch, mqttClient, devRepo, healthChecks(store, mqttClient, devRepo)...).WithControlToken(cfg.ControlToken).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {

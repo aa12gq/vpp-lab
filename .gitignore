@@ -2,7 +2,7 @@
 bin/
 data/
 dist/
-vpp-lab
-simulator
+/vpp-lab
+/simulator
 *.log
 .DS_Store

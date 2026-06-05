@@ -43,6 +43,8 @@ http://localhost:8080/
 
 控制台支持查看 summary、设备在线状态、调度预览、最近命令，并可对负载下发 ON/OFF、对电池下发 CHG/IDLE/DIS 模式命令。调度预览面板也支持在填写最大跟踪偏差后确认下发计划候选命令。
 
+控制鉴权默认关闭。设置 `CONTROL_TOKEN` 后，设备注册、策略修改、命令下发和调度确认下发必须带 `X-VPP-Control-Token`；内置控制台可在右上角输入 token，浏览器会保存到本地。
+
 如果只想本机调试 Go 服务：
 
 ```bash
@@ -171,6 +173,7 @@ EMQX Dashboard：
 ```bash
 curl -X POST http://localhost:8080/api/v1/devices/load_02/command \
   -H 'Content-Type: application/json' \
+  -H 'X-VPP-Control-Token: your-token-if-enabled' \
   -d '{"action":"set_relay","params":{"on":false},"reason":"manual test"}'
 ```
 

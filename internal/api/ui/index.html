@@ -82,6 +82,15 @@
       color: var(--ink);
     }
 
+    .token-input {
+      width: 190px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: var(--ink);
+    }
+
     .btn {
       border: 1px solid var(--ink);
       background: var(--ink);
@@ -334,6 +343,7 @@
       </div>
       <div class="actions">
         <input id="site" class="site-input" value="home-lab" aria-label="site id">
+        <input id="control-token" class="token-input" type="password" placeholder="control token" aria-label="control token">
         <button id="refresh" class="btn" type="button">刷新</button>
         <a class="btn secondary" href="/metrics">Metrics</a>
       </div>
@@ -405,6 +415,13 @@
       const res = await fetch(path, { headers: { "Accept": "application/json" } });
       if (!res.ok) throw new Error(`${path} ${res.status}`);
       return res.json();
+    }
+
+    function controlHeaders() {
+      const token = $("control-token")?.value.trim();
+      const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+      if (token) headers["X-VPP-Control-Token"] = token;
+      return headers;
     }
 
     function setMetric(id, value) {
@@ -515,7 +532,7 @@
     async function postCommand(deviceID, command) {
       const res = await fetch(`/api/v1/devices/${encodeURIComponent(deviceID)}/command`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: controlHeaders(),
         body: JSON.stringify(command),
       });
       if (!res.ok) {
@@ -541,7 +558,7 @@
       try {
         const res = await fetch(`/api/v1/sites/${encodeURIComponent(site())}/dispatch/apply`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          headers: controlHeaders(),
           body: JSON.stringify({ confirm: true, max_abs_tracking_error_w: limit }),
         });
         const payload = await res.json();
@@ -610,6 +627,10 @@
 
     $("refresh").addEventListener("click", refresh);
     $("site").addEventListener("change", refresh);
+    $("control-token").value = localStorage.getItem("vpp-control-token") || "";
+    $("control-token").addEventListener("change", () => {
+      localStorage.setItem("vpp-control-token", $("control-token").value.trim());
+    });
     $("devices").addEventListener("click", handleDeviceCommand);
     $("preview").addEventListener("click", (event) => {
       if (event.target.closest("#apply-dispatch")) applyDispatch();
