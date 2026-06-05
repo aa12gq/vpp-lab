@@ -50,6 +50,20 @@ services:
       - ./data/grafana:/var/lib/grafana
     depends_on:
       - influxdb
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    depends_on:
+      - app
 
   app:
     build:
@@ -57,8 +71,13 @@ services:
       dockerfile: deploy/Dockerfile
     env_file:
       - .env
+    environment:
+      MQTT_BROKER: tcp://emqx:1883
+      INFLUX_URL: http://influxdb:8086
+      POSTGRES_DSN: postgres://vpp:vpp@postgres:5432/vpp?sslmode=disable
     ports:
       - "8080:8080"
+    restart: on-failure
     depends_on:
       - emqx
       - influxdb

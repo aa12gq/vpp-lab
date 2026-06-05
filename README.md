@@ -26,6 +26,14 @@ docker compose up -d emqx influxdb postgres redis grafana
 go run ./cmd/vpp-lab
 ```
 
+如果希望同时启动 Prometheus 和容器化平台服务：
+
+```bash
+docker compose up -d
+```
+
+说明：`.env` 默认服务地址适合本机 `go run`；`docker-compose.yml` 会为容器化 `app` 覆盖为 `emqx/influxdb/postgres` 这些 Compose 服务名。
+
 另开终端启动模拟器：
 
 ```bash
@@ -112,6 +120,11 @@ Grafana：
 - URL: http://localhost:3000
 - 用户名: `admin`
 - 密码: `public`
+
+Prometheus：
+
+- URL: http://localhost:9090
+- 抓取目标: `app:8080/metrics`
 
 EMQX Dashboard：
 
