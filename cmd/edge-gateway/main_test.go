@@ -71,3 +71,21 @@ func TestDecodeLocalCommand(t *testing.T) {
 		t.Fatalf("expected missing fields error")
 	}
 }
+
+func TestEdgeCounterSnapshot(t *testing.T) {
+	counter := newEdgeCounter("accepted", "failed")
+	counter.Inc("failed")
+	counter.Inc("accepted")
+	counter.Inc("accepted")
+
+	got := counter.Snapshot()
+	if len(got) != 2 {
+		t.Fatalf("expected 2 counter values, got %+v", got)
+	}
+	if got[0].Label != "accepted" || got[0].Value != 2 {
+		t.Fatalf("unexpected accepted counter: %+v", got)
+	}
+	if got[1].Label != "failed" || got[1].Value != 1 {
+		t.Fatalf("unexpected failed counter: %+v", got)
+	}
+}

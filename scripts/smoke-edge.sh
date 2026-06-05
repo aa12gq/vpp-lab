@@ -30,6 +30,7 @@ metrics="$(curl -fsS "$EDGE_BASE/metrics")" || fail "metrics request failed"
 echo "$metrics" | grep -q 'vpp_edge_cache_messages{state="pending"}' || fail "missing pending cache metric"
 echo "$metrics" | grep -q 'vpp_edge_cache_oldest_pending_age_seconds' || fail "missing oldest pending age metric"
 echo "$metrics" | grep -q 'vpp_edge_mqtt_connected{side="local"} 1' || fail "missing local mqtt connected metric"
+echo "$metrics" | grep -q 'vpp_edge_local_commands_total{status="accepted"}' || fail "missing edge local command metric"
 
 echo "checking edge local command"
 command_resp="$(curl -fsS -X POST "$EDGE_BASE/api/v1/local-command" \
@@ -37,5 +38,7 @@ command_resp="$(curl -fsS -X POST "$EDGE_BASE/api/v1/local-command" \
 	-d '{"device_type":"load","device_id":"load_02","action":"set_relay","params":{"on":true},"reason":"edge smoke"}')" || fail "local command request failed"
 echo "$command_resp" | grep -q '"topic":"vpp/home-lab/load/load_02/command"' || fail "unexpected local command response: $command_resp"
 echo "$command_resp" | grep -q '"command_id":' || fail "local command missing command id: $command_resp"
+metrics="$(curl -fsS "$EDGE_BASE/metrics")" || fail "metrics request failed after local command"
+echo "$metrics" | grep -q 'vpp_edge_local_commands_total{status="accepted"} 1' || fail "local command accepted metric did not increment"
 
 echo "edge smoke ok"

@@ -115,7 +115,7 @@ API / scheduler / dispatch apply
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
-- Docker Compose 内置可选 edge-gateway profile，用于验证边缘 SQLite 缓存、HTTP 管理端、上游转发和本地命令下发
+- Docker Compose 内置可选 edge-gateway profile，用于验证边缘 SQLite 缓存、HTTP 管理端、上游转发、本地命令下发和边缘指标
 - 平台服务、simulator 和 edge-gateway 均支持 MQTT 用户名/密码和客户端 TLS；edge-gateway 可为本地 broker 和上游 broker 分别配置凭据与 TLS 文件
 - 平台服务和 simulator 支持 `DEVICE_KEYS` 基础版设备 HMAC 签名；开启后平台校验 telemetry、event、status 和 command/ack
 - Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态

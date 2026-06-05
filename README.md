@@ -59,7 +59,7 @@ curl http://localhost:8081/api/v1/cache/stats
 curl http://localhost:8081/metrics
 ```
 
-`/api/v1/cache/stats` 会返回 `pending`、`total` 和可选的 `oldest_pending_at`；`/metrics` 会暴露待发送消息数、总缓存数、最老待发送消息年龄和 MQTT 连接状态。
+`/api/v1/cache/stats` 会返回 `pending`、`total` 和可选的 `oldest_pending_at`；`/metrics` 会暴露待发送消息数、总缓存数、最老待发送消息年龄、MQTT 连接状态和边缘本地命令计数。
 
 边缘网关也支持本地命令下发，适合云端断连时做最小离线控制。设置 `EDGE_CONTROL_TOKEN` 后需带 `X-VPP-Edge-Token` 或 Bearer token：
 

@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -128,6 +129,7 @@ func main() {
 
 func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client, cacheRetention time.Duration, siteID string, controlToken string) http.Handler {
 	mux := http.NewServeMux()
+	localCommands := newEdgeCounter("accepted", "failed")
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusOK
 		body := map[string]interface{}{
@@ -152,15 +154,18 @@ func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client,
 	})
 	mux.HandleFunc("POST /api/v1/local-command", func(w http.ResponseWriter, r *http.Request) {
 		if !edgeAuthorized(r, controlToken) {
+			localCommands.Inc("failed")
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "edge control token required"})
 			return
 		}
 		if local == nil || !local.IsConnected() {
+			localCommands.Inc("failed")
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "local mqtt disconnected"})
 			return
 		}
 		req, err := decodeLocalCommand(r)
 		if err != nil {
+			localCommands.Inc("failed")
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -176,15 +181,18 @@ func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client,
 		}
 		payload, err := json.Marshal(cmd)
 		if err != nil {
+			localCommands.Inc("failed")
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
 		targetTopic := topic.Command(req.SiteID, req.DeviceType, req.DeviceID)
 		token := local.Publish(targetTopic, 1, false, payload)
 		if token.Wait() && token.Error() != nil {
+			localCommands.Inc("failed")
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": token.Error().Error()})
 			return
 		}
+		localCommands.Inc("accepted")
 		writeJSON(w, http.StatusAccepted, map[string]interface{}{
 			"topic":   targetTopic,
 			"command": cmd,
@@ -211,8 +219,59 @@ func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client,
 		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_mqtt_connected gauge\n")
 		_, _ = fmt.Fprintf(w, "vpp_edge_mqtt_connected{side=\"local\"} %.0f\n", boolFloat(local != nil && local.IsConnected()))
 		_, _ = fmt.Fprintf(w, "vpp_edge_mqtt_connected{side=\"upstream\"} %.0f\n", boolFloat(upstream != nil && upstream.IsConnected()))
+		_, _ = fmt.Fprintf(w, "# HELP vpp_edge_local_commands_total Edge local commands by status.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_local_commands_total counter\n")
+		for _, count := range localCommands.Snapshot() {
+			_, _ = fmt.Fprintf(w, "vpp_edge_local_commands_total{status=\"%s\"} %d\n", count.Label, count.Value)
+		}
 	})
 	return mux
+}
+
+type edgeCounter struct {
+	mu     sync.RWMutex
+	counts map[string]uint64
+	order  []string
+}
+
+type edgeCounterValue struct {
+	Label string
+	Value uint64
+}
+
+func newEdgeCounter(labels ...string) *edgeCounter {
+	c := &edgeCounter{counts: make(map[string]uint64), order: append([]string(nil), labels...)}
+	for _, label := range labels {
+		c.counts[label] = 0
+	}
+	return c
+}
+
+func (c *edgeCounter) Inc(label string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.counts[label]; !ok {
+		c.order = append(c.order, label)
+	}
+	c.counts[label]++
+}
+
+func (c *edgeCounter) Snapshot() []edgeCounterValue {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]edgeCounterValue, 0, len(c.counts))
+	seen := make(map[string]bool, len(c.counts))
+	for _, label := range c.order {
+		out = append(out, edgeCounterValue{Label: label, Value: c.counts[label]})
+		seen[label] = true
+	}
+	for label, value := range c.counts {
+		if seen[label] {
+			continue
+		}
+		out = append(out, edgeCounterValue{Label: label, Value: value})
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {
