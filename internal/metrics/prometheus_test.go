@@ -27,12 +27,18 @@ func TestRenderPrometheusIncludesDeviceAndCommandMetrics(t *testing.T) {
 			},
 		},
 		Commands: []model.CommandRecord{{Status: "acked"}},
+		AuditLogs: []model.AuditLog{
+			{Action: "policy.update", StatusCode: 200},
+			{Action: "policy.update", StatusCode: 401},
+		},
 	})
 	for _, want := range []string{
 		`vpp_site_power_w{component="pv",site_id="home-lab"} 90.000000`,
 		`vpp_device_online{device_id="battery_01",device_type="battery",site_id="home-lab"} 1.000000`,
 		`vpp_device_metric{device_id="battery_01",device_type="battery",metric="soc",site_id="home-lab"} 0.600000`,
 		`vpp_command_records_total{site_id="home-lab",status="acked"} 1.000000`,
+		`vpp_audit_logs_total{action="policy.update",site_id="home-lab",status_code="200"} 1.000000`,
+		`vpp_audit_logs_total{action="policy.update",site_id="home-lab",status_code="401"} 1.000000`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing metric %q in:\n%s", want, out)

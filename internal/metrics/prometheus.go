@@ -19,6 +19,7 @@ type Snapshot struct {
 	Telemetry   map[string]model.Telemetry
 	Commands    []model.CommandRecord
 	Events      []model.DeviceEvent
+	AuditLogs   []model.AuditLog
 }
 
 func RenderPrometheus(s Snapshot) string {
@@ -61,6 +62,11 @@ func RenderPrometheus(s Snapshot) string {
 	writeType(&b, "vpp_device_events_total", "gauge")
 	for severity, count := range eventSeverityCounts(s.Events) {
 		writeMetric(&b, "vpp_device_events_total", map[string]string{"site_id": s.SiteID, "severity": severity}, float64(count))
+	}
+	writeHelp(&b, "vpp_audit_logs_total", "Recent control operation audit logs by action and status code.")
+	writeType(&b, "vpp_audit_logs_total", "gauge")
+	for key, count := range auditLogCounts(s.AuditLogs) {
+		writeMetric(&b, "vpp_audit_logs_total", map[string]string{"site_id": s.SiteID, "action": key.action, "status_code": key.statusCode}, float64(count))
 	}
 	return b.String()
 }
@@ -139,6 +145,27 @@ func eventSeverityCounts(events []model.DeviceEvent) map[string]int {
 			counts[severity] = 0
 		}
 		counts[severity]++
+	}
+	return counts
+}
+
+type auditLogKey struct {
+	action     string
+	statusCode string
+}
+
+func auditLogCounts(logs []model.AuditLog) map[auditLogKey]int {
+	counts := make(map[auditLogKey]int)
+	for _, log := range logs {
+		action := log.Action
+		if action == "" {
+			action = "unknown"
+		}
+		statusCode := fmt.Sprintf("%d", log.StatusCode)
+		if log.StatusCode == 0 {
+			statusCode = "0"
+		}
+		counts[auditLogKey{action: action, statusCode: statusCode}]++
 	}
 	return counts
 }

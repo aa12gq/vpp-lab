@@ -41,6 +41,10 @@ echo "checking audit logs"
 audit_logs="$(curl -fsS "$API_BASE/api/v1/audit-logs")" || fail "audit logs request failed"
 printf '%s' "$audit_logs" | grep -q '^\[' || fail "audit logs response is not a JSON array: $audit_logs"
 
+echo "checking api metrics"
+metrics="$(curl -fsS "$API_BASE/metrics")" || fail "api metrics request failed"
+echo "$metrics" | grep -q 'vpp_audit_logs_total' || fail "missing audit log metric"
+
 echo "checking prometheus online devices"
 prom="$(curl -fsS "$PROM_BASE/api/v1/query?query=sum%28vpp_device_online%29")" || fail "prometheus request failed"
 echo "$prom" | grep -q '"status":"success"' || fail "prometheus query failed: $prom"

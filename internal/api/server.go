@@ -115,7 +115,8 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, statusCode, map[string]interface{}{"status": status, "checks": checks})
 }
 
-func (s *Server) metrics(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
+	auditLogs := s.recentAuditLogs(r.Context())
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(metrics.RenderPrometheus(metrics.Snapshot{
 		GeneratedAt: time.Now(),
@@ -125,7 +126,20 @@ func (s *Server) metrics(w http.ResponseWriter, _ *http.Request) {
 		Telemetry:   s.store.Telemetry(),
 		Commands:    s.store.Commands(),
 		Events:      s.store.Events(),
+		AuditLogs:   auditLogs,
 	})))
+}
+
+func (s *Server) recentAuditLogs(ctx context.Context) []model.AuditLog {
+	if s.audit == nil {
+		return nil
+	}
+	logs, err := s.audit.ListAuditLogs(ctx, 200)
+	if err != nil {
+		log.Printf("load audit logs for metrics failed: %v", err)
+		return nil
+	}
+	return logs
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {
