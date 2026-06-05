@@ -36,6 +36,7 @@ go run ./cmd/simulator
 
 ```bash
 curl http://localhost:8080/healthz
+curl http://localhost:8080/metrics
 curl http://localhost:8080/api/v1/devices
 curl http://localhost:8080/api/v1/sites/home-lab/summary
 curl http://localhost:8080/api/v1/sites/home-lab/plan
@@ -44,6 +45,8 @@ curl http://localhost:8080/api/v1/commands
 ```
 
 `/api/v1/commands` 返回最近 200 条命令记录。命令下发和设备回执会写入 PostgreSQL，服务重启后仍可查询。
+
+`/metrics` 使用 Prometheus 文本格式输出站点功率、设备在线状态、设备最新遥测和命令状态计数。
 
 生成自定义日前计划：
 

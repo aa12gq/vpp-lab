@@ -39,5 +39,5 @@
 - 命令审计持久化：已完成
 - 操作审计
 - Redis 实时状态
-- Prometheus 指标
+- Prometheus 指标：已完成
 - 边缘网关离线缓存

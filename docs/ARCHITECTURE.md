@@ -104,6 +104,12 @@ API / scheduler / dispatch apply
 - 可通过 `max_abs_tracking_error_w` 限制实时偏差
 - 通过校验后才发布 MQTT 控制命令
 
+监控指标：
+
+- `/metrics` 输出 Prometheus 文本格式
+- 包含站点功率、平均 SOC、设备在线状态、设备遥测和命令状态计数
+- 设备在线状态基于最近遥测时间计算，默认 30 秒内视为在线
+
 ## 阶段 5 扩展点
 
 - `internal/state` 替换为 Redis

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"vpp-lab/internal/dispatch"
+	"vpp-lab/internal/metrics"
 	"vpp-lab/internal/model"
 	"vpp-lab/internal/optimizer"
 	"vpp-lab/internal/scheduler"
@@ -37,6 +38,7 @@ func New(siteID string, store *state.Store, sch *scheduler.Scheduler, publisher 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /api/v1/devices", s.listDevices)
 	mux.HandleFunc("POST /api/v1/devices", s.upsertDevice)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/summary", s.summary)
@@ -54,6 +56,18 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) metrics(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	_, _ = w.Write([]byte(metrics.RenderPrometheus(metrics.Snapshot{
+		GeneratedAt: time.Now(),
+		SiteID:      s.siteID,
+		Summary:     s.store.Summary(s.siteID),
+		Devices:     s.store.Devices(),
+		Telemetry:   s.store.Telemetry(),
+		Commands:    s.store.Commands(),
+	})))
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {
