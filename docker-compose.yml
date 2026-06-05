@@ -61,6 +61,7 @@ services:
       - "--storage.tsdb.path=/prometheus"
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/rules:/etc/prometheus/rules:ro
       - ./data/prometheus:/prometheus
     depends_on:
       - app

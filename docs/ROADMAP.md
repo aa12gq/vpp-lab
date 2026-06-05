@@ -40,4 +40,5 @@
 - 操作审计
 - Redis 实时状态
 - Prometheus 指标：已完成
+- Prometheus 告警规则：已完成基础版
 - 边缘网关离线缓存

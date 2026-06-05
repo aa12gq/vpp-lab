@@ -110,6 +110,7 @@ API / scheduler / dispatch apply
 - 包含站点功率、平均 SOC、设备在线状态、设备遥测和命令状态计数
 - 设备在线状态基于最近遥测时间计算，默认 30 秒内视为在线
 - Docker Compose 内置 Prometheus，默认抓取 `app:8080/metrics`
+- Prometheus 内置基础规则：设备离线、命令失败、净负荷过高
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
 
 ## 阶段 5 扩展点

@@ -1,0 +1,30 @@
+groups:
+  - name: vpp-lab
+    interval: 5s
+    rules:
+      - alert: VPPDeviceOffline
+        expr: vpp_device_online == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "VPP device offline"
+          description: "Device {{ $labels.device_id }} at site {{ $labels.site_id }} has no fresh telemetry."
+
+      - alert: VPPCommandFailed
+        expr: vpp_command_records_total{status="failed"} > 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: "VPP command failure recorded"
+          description: "Recent command history contains failed commands at site {{ $labels.site_id }}."
+
+      - alert: VPPHighNetLoad
+        expr: vpp_site_power_w{component="net"} > 100
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "VPP high net load"
+          description: "Net load at site {{ $labels.site_id }} is above 100W for more than 30 seconds."

@@ -126,6 +126,13 @@ Prometheus：
 - URL: http://localhost:9090
 - 抓取目标: `app:8080/metrics`
 
+查看 Prometheus 告警规则状态：
+
+```bash
+curl http://localhost:9090/api/v1/rules
+curl http://localhost:9090/api/v1/alerts
+```
+
 EMQX Dashboard：
 
 - URL: http://localhost:18083
