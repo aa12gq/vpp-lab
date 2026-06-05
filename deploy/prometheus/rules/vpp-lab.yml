@@ -29,6 +29,15 @@ groups:
           summary: "VPP control operation failure"
           description: "Recent audit history contains failed control operation {{ $labels.action }} at site {{ $labels.site_id }}."
 
+      - alert: VPPMQTTRejectedMessages
+        expr: vpp_mqtt_rejected_messages_total > 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: "VPP MQTT messages rejected"
+          description: "MQTT messages are being rejected at site {{ $labels.site_id }} for reason {{ $labels.reason }}."
+
       - alert: VPPHighNetLoad
         expr: vpp_site_power_w{component="net"} > 100
         for: 30s

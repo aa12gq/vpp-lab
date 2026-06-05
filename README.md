@@ -184,7 +184,7 @@ Grafana：
 - Overview Dashboard: http://localhost:3000/d/vpp-lab-overview/vpp-lab-overview
 - Operations Dashboard: http://localhost:3000/d/vpp-lab-operations/vpp-lab-operations
 
-Operations Dashboard 包含设备在线、命令失败、控制失败、设备事件计数、事件 severity 分布和审计操作分布。
+Operations Dashboard 包含设备在线、命令失败、控制失败、MQTT 拒绝消息、设备事件计数、事件 severity 分布和审计操作分布。
 
 Prometheus：
 
@@ -198,7 +198,7 @@ curl http://localhost:9090/api/v1/rules
 curl http://localhost:9090/api/v1/alerts
 ```
 
-内置告警规则覆盖设备离线、命令失败、控制操作失败、净负荷过高、设备 warning/critical 事件。
+内置告警规则覆盖设备离线、命令失败、控制操作失败、MQTT 拒绝消息、净负荷过高、设备 warning/critical 事件。
 
 EMQX Dashboard：
 

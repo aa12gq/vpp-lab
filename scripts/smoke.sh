@@ -53,5 +53,6 @@ echo "$prom" | grep -q '"status":"success"' || fail "prometheus query failed: $p
 echo "checking prometheus rules"
 rules="$(curl -fsS "$PROM_BASE/api/v1/rules")" || fail "prometheus rules request failed"
 echo "$rules" | grep -q 'VPPAuditControlFailure' || fail "missing audit control failure alert rule"
+echo "$rules" | grep -q 'VPPMQTTRejectedMessages' || fail "missing mqtt rejected messages alert rule"
 
 echo "smoke ok: $online_count online device(s)"
