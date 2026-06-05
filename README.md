@@ -22,19 +22,21 @@
 
 ```bash
 cp .env.example .env
+docker compose up -d
+```
+
+这会启动 EMQX、InfluxDB、PostgreSQL、Redis、Go 平台服务、simulator、Prometheus 和 Grafana。
+
+如果只想本机调试 Go 服务：
+
+```bash
 docker compose up -d emqx influxdb postgres redis grafana
 go run ./cmd/vpp-lab
 ```
 
-如果希望同时启动 Prometheus 和容器化平台服务：
-
-```bash
-docker compose up -d
-```
-
 说明：`.env` 默认服务地址适合本机 `go run`；`docker-compose.yml` 会为容器化 `app` 覆盖为 `emqx/influxdb/postgres` 这些 Compose 服务名。
 
-另开终端启动模拟器：
+本机调试时可另开终端启动模拟器：
 
 ```bash
 go run ./cmd/simulator

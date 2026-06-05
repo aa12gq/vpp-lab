@@ -113,6 +113,7 @@ API / scheduler / dispatch apply
 - Prometheus 内置基础规则：设备离线、命令失败、净负荷过高
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
 - Grafana 内置 Overview 和 Operations 两个 dashboard
+- Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
 
 ## 阶段 5 扩展点
 

@@ -83,3 +83,16 @@ services:
       - emqx
       - influxdb
       - postgres
+
+  simulator:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    entrypoint: ["/app/simulator"]
+    environment:
+      MQTT_BROKER: tcp://emqx:1883
+      SITE_ID: home-lab
+    restart: on-failure
+    depends_on:
+      - emqx
+      - app
