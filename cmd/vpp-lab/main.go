@@ -45,6 +45,9 @@ func main() {
 	if err := loadRecentCommands(ctx, devRepo, store); err != nil {
 		log.Fatalf("load commands: %v", err)
 	}
+	if err := loadRecentEvents(ctx, devRepo, store); err != nil {
+		log.Fatalf("load events: %v", err)
+	}
 
 	ts := timeseries.NewWriter(cfg.InfluxURL, cfg.InfluxToken, cfg.InfluxOrg, cfg.InfluxBucket)
 	defer ts.Close()
@@ -115,6 +118,15 @@ func loadRecentCommands(ctx context.Context, repo *repository.DeviceRepository, 
 		return err
 	}
 	store.SetCommands(commands)
+	return nil
+}
+
+func loadRecentEvents(ctx context.Context, repo *repository.DeviceRepository, store *state.Store) error {
+	events, err := repo.ListEvents(ctx, 200)
+	if err != nil {
+		return err
+	}
+	store.SetEvents(events)
 	return nil
 }
 

@@ -53,6 +53,7 @@ func main() {
 		soc, batteryPower, batteryState := sim.batteryTelemetry()
 		publish(client, siteID, model.DevicePV, "pv_01", seq, map[string]float64{"voltage": 18, "current": pvPower / 18, "power": pvPower})
 		publishState(client, siteID, model.DeviceBattery, "battery_01", seq, batteryState, map[string]float64{"voltage": 12.4, "current": batteryPower / 12.4, "power": batteryPower, "soc": soc, "temperature": 25})
+		sim.publishBatterySOCEvent(seq, soc)
 		publish(client, siteID, model.DeviceLoad, "load_01", seq, map[string]float64{"voltage": 12, "current": load1 / 12, "power": load1})
 		publish(client, siteID, model.DeviceLoad, "load_02", seq, map[string]float64{"voltage": 12, "current": load2 / 12, "power": load2})
 		log.Printf("published seq=%d pv=%.1f load=%.1f soc=%.2f battery=%s", seq, pvPower, load1+load2, soc, batteryState)
@@ -92,6 +93,7 @@ type simulator struct {
 	relays      map[string]bool
 	batteryMode string
 	soc         float64
+	lowSOCOpen  bool
 }
 
 func newSimulator(siteID string) *simulator {
@@ -132,6 +134,47 @@ func (s *simulator) batteryTelemetry() (float64, float64, string) {
 		s.batteryMode = "idle"
 	}
 	return s.soc, power, s.batteryMode
+}
+
+func (s *simulator) publishBatterySOCEvent(seq int64, soc float64) {
+	if s.client == nil {
+		return
+	}
+	s.mu.Lock()
+	shouldWarn := soc <= 0.20 && !s.lowSOCOpen
+	shouldRecover := soc >= 0.30 && s.lowSOCOpen
+	if shouldWarn {
+		s.lowSOCOpen = true
+	}
+	if shouldRecover {
+		s.lowSOCOpen = false
+	}
+	s.mu.Unlock()
+	switch {
+	case shouldWarn:
+		s.publishEvent("battery_01", "warning", "low_soc", "battery SOC is below 20%", seq, map[string]interface{}{"soc": soc})
+	case shouldRecover:
+		s.publishEvent("battery_01", "info", "soc_recovered", "battery SOC recovered above 30%", seq, map[string]interface{}{"soc": soc})
+	}
+}
+
+func (s *simulator) publishEvent(deviceID, severity, code, message string, seq int64, details map[string]interface{}) {
+	event := model.DeviceEvent{
+		EventID:   deviceID + "-" + code + "-" + time.Now().Format("20060102150405"),
+		Severity:  severity,
+		Code:      code,
+		Message:   message,
+		Details:   details,
+		Timestamp: time.Now().Unix(),
+	}
+	payload, _ := json.Marshal(event)
+	t := "vpp/" + s.siteID + "/" + string(model.DeviceBattery) + "/" + deviceID + "/event"
+	token := s.client.Publish(t, 1, false, payload)
+	if token.Wait() && token.Error() != nil {
+		log.Printf("publish event failed topic=%s err=%v", t, token.Error())
+		return
+	}
+	log.Printf("published event seq=%d device=%s severity=%s code=%s", seq, deviceID, severity, code)
 }
 
 func (s *simulator) handleCommand(_ paho.Client, msg paho.Message) {

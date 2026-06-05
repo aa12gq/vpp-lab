@@ -19,6 +19,7 @@ type Store struct {
 	devices   map[string]model.Device
 	telemetry map[string]model.Telemetry
 	commands  []model.CommandRecord
+	events    []model.DeviceEvent
 	redis     *redis.Client
 	redisKey  string
 }
@@ -28,6 +29,7 @@ func NewStore() *Store {
 		devices:   make(map[string]model.Device),
 		telemetry: make(map[string]model.Telemetry),
 		commands:  make([]model.CommandRecord, 0, 200),
+		events:    make([]model.DeviceEvent, 0, 200),
 	}
 }
 
@@ -233,6 +235,32 @@ func (s *Store) Commands() []model.CommandRecord {
 	defer s.mu.RUnlock()
 	out := make([]model.CommandRecord, len(s.commands))
 	copy(out, s.commands)
+	return out
+}
+
+func (s *Store) PutEvent(event model.DeviceEvent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append([]model.DeviceEvent{event}, s.events...)
+	if len(s.events) > 200 {
+		s.events = s.events[:200]
+	}
+}
+
+func (s *Store) SetEvents(events []model.DeviceEvent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append([]model.DeviceEvent(nil), events...)
+	if len(s.events) > 200 {
+		s.events = s.events[:200]
+	}
+}
+
+func (s *Store) Events() []model.DeviceEvent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]model.DeviceEvent, len(s.events))
+	copy(out, s.events)
 	return out
 }
 

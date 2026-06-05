@@ -56,6 +56,19 @@ type CommandRecord struct {
 	UpdatedAt  time.Time   `json:"updated_at"`
 }
 
+type DeviceEvent struct {
+	EventID    string                 `json:"event_id"`
+	SiteID     string                 `json:"site_id"`
+	DeviceID   string                 `json:"device_id"`
+	DeviceType DeviceType             `json:"device_type"`
+	Severity   string                 `json:"severity"`
+	Code       string                 `json:"code"`
+	Message    string                 `json:"message"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+	Timestamp  int64                  `json:"timestamp"`
+	CreatedAt  time.Time              `json:"created_at"`
+}
+
 type SiteSummary struct {
 	SiteID       string    `json:"site_id"`
 	PVPowerW     float64   `json:"pv_power_w"`

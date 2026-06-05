@@ -41,7 +41,7 @@ make smoke
 http://localhost:8080/
 ```
 
-控制台支持查看 summary、设备在线状态、调度预览、最近命令，并可对负载下发 ON/OFF、对电池下发 CHG/IDLE/DIS 模式命令。调度预览面板也支持在填写最大跟踪偏差后确认下发计划候选命令。
+控制台支持查看 summary、设备在线状态、调度预览、最近命令、设备事件，并可对负载下发 ON/OFF、对电池下发 CHG/IDLE/DIS 模式命令。调度预览面板也支持在填写最大跟踪偏差后确认下发计划候选命令。
 
 控制鉴权默认关闭。设置 `CONTROL_TOKEN` 后，设备注册、策略修改、命令下发和调度确认下发必须带 `X-VPP-Control-Token`；内置控制台可在右上角输入 token，浏览器会保存到本地。
 
@@ -73,6 +73,7 @@ curl http://localhost:8080/api/v1/sites/home-lab/device-states
 curl http://localhost:8080/api/v1/sites/home-lab/plan
 curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 curl http://localhost:8080/api/v1/commands
+curl http://localhost:8080/api/v1/events
 ```
 
 `/healthz` 会检查 MQTT、PostgreSQL 和状态缓存；任一依赖异常时返回 HTTP 503。
@@ -80,6 +81,8 @@ curl http://localhost:8080/api/v1/commands
 `/api/v1/sites/{site_id}/device-states` 返回每台设备的元信息、最新遥测、在线状态和 stale 秒数，适合给自建控制台直接使用。
 
 `/api/v1/commands` 返回最近 200 条命令记录。命令下发和设备回执会写入 PostgreSQL，服务重启后仍可查询。
+
+`/api/v1/events` 返回最近 200 条设备事件。simulator 会在电池 SOC 低于 20% 时发布 `warning low_soc` 事件，恢复到 30% 以上时发布 `info soc_recovered`。
 
 `/metrics` 使用 Prometheus 文本格式输出站点功率、设备在线状态、设备最新遥测和命令状态计数。
 

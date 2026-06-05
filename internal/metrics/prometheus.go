@@ -18,6 +18,7 @@ type Snapshot struct {
 	Devices     []model.Device
 	Telemetry   map[string]model.Telemetry
 	Commands    []model.CommandRecord
+	Events      []model.DeviceEvent
 }
 
 func RenderPrometheus(s Snapshot) string {
@@ -55,6 +56,11 @@ func RenderPrometheus(s Snapshot) string {
 	writeType(&b, "vpp_command_records_total", "gauge")
 	for status, count := range commandStatusCounts(s.Commands) {
 		writeMetric(&b, "vpp_command_records_total", map[string]string{"site_id": s.SiteID, "status": status}, float64(count))
+	}
+	writeHelp(&b, "vpp_device_events_total", "Recent device events by severity.")
+	writeType(&b, "vpp_device_events_total", "gauge")
+	for severity, count := range eventSeverityCounts(s.Events) {
+		writeMetric(&b, "vpp_device_events_total", map[string]string{"site_id": s.SiteID, "severity": severity}, float64(count))
 	}
 	return b.String()
 }
@@ -118,6 +124,21 @@ func commandStatusCounts(commands []model.CommandRecord) map[string]int {
 			counts[cmd.Status] = 0
 		}
 		counts[cmd.Status]++
+	}
+	return counts
+}
+
+func eventSeverityCounts(events []model.DeviceEvent) map[string]int {
+	counts := map[string]int{"info": 0, "warning": 0, "critical": 0}
+	for _, event := range events {
+		severity := event.Severity
+		if severity == "" {
+			severity = "info"
+		}
+		if _, ok := counts[severity]; !ok {
+			counts[severity] = 0
+		}
+		counts[severity]++
 	}
 	return counts
 }

@@ -27,6 +27,7 @@ type Client struct {
 type CommandRecorder interface {
 	PutCommandIssued(ctx context.Context, siteID string, d model.Device, cmd model.Command) error
 	PutCommandAck(ctx context.Context, siteID string, deviceType model.DeviceType, deviceID string, ack model.CommandAck) error
+	PutEvent(ctx context.Context, event model.DeviceEvent) error
 }
 
 func NewClient(cfg config.Config, store *state.Store, ts *timeseries.Writer) *Client {
@@ -129,7 +130,32 @@ func (c *Client) handleMessage(_ paho.Client, msg paho.Message) {
 		log.Printf("command ack topic=%s payload=%s", msg.Topic(), string(msg.Payload()))
 	case "command":
 		return
-	case "status", "event":
+	case "event":
+		var event model.DeviceEvent
+		if err := json.Unmarshal(msg.Payload(), &event); err != nil {
+			log.Printf("bad event topic=%s err=%v", msg.Topic(), err)
+			return
+		}
+		event.SiteID = parsed.SiteID
+		event.DeviceID = parsed.DeviceID
+		event.DeviceType = model.DeviceType(parsed.DeviceType)
+		if event.Timestamp == 0 {
+			event.Timestamp = time.Now().Unix()
+		}
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+		if event.EventID == "" {
+			event.EventID = fmt.Sprintf("%s-%d", event.DeviceID, event.Timestamp)
+		}
+		c.state.PutEvent(event)
+		if c.recorder != nil {
+			if err := c.recorder.PutEvent(context.Background(), event); err != nil {
+				log.Printf("persist event failed event=%s err=%v", event.EventID, err)
+			}
+		}
+		log.Printf("device event topic=%s severity=%s code=%s message=%s", msg.Topic(), event.Severity, event.Code, event.Message)
+	case "status":
 		log.Printf("device %s topic=%s payload=%s", parsed.DeviceID, parsed.Kind, string(msg.Payload()))
 	default:
 		log.Printf("ignored mqtt topic=%s", msg.Topic())

@@ -117,6 +117,7 @@ API / scheduler / dispatch apply
 - Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态
 - `/healthz` 检查 MQTT、PostgreSQL 和状态缓存，依赖异常时返回 503
 - `/api/v1/sites/{site_id}/device-states` 输出设备元信息、最新遥测、在线状态和 stale 秒数
+- `/api/v1/events` 输出最近设备事件，MQTT `event` topic 会落内存和 PostgreSQL
 - 可通过 `CONTROL_TOKEN` 保护控制类 API，命令/策略/调度下发需带 `X-VPP-Control-Token`
 - `internal/state` 支持可选 Redis 后端，缓存每台设备最新遥测，服务重启后恢复实时 summary
 

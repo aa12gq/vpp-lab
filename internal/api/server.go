@@ -66,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/dispatch-preview", s.customDispatchPreview)
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/dispatch/apply", s.applyDispatch)
 	mux.HandleFunc("GET /api/v1/commands", s.commands)
+	mux.HandleFunc("GET /api/v1/events", s.events)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", s.command)
@@ -108,6 +109,7 @@ func (s *Server) metrics(w http.ResponseWriter, _ *http.Request) {
 		Devices:     s.store.Devices(),
 		Telemetry:   s.store.Telemetry(),
 		Commands:    s.store.Commands(),
+		Events:      s.store.Events(),
 	})))
 }
 
@@ -246,6 +248,10 @@ func (s *Server) applyDispatch(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) commands(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.store.Commands())
+}
+
+func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.store.Events())
 }
 
 func (s *Server) getPolicy(w http.ResponseWriter, _ *http.Request) {

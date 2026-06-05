@@ -33,6 +33,10 @@ if [ "$online_count" -lt 1 ]; then
 	fail "no online devices in device-states: $states"
 fi
 
+echo "checking device events"
+events="$(curl -fsS "$API_BASE/api/v1/events")" || fail "events request failed"
+printf '%s' "$events" | grep -q '^\[' || fail "events response is not a JSON array: $events"
+
 echo "checking prometheus online devices"
 prom="$(curl -fsS "$PROM_BASE/api/v1/query?query=sum%28vpp_device_online%29")" || fail "prometheus request failed"
 echo "$prom" | grep -q '"status":"success"' || fail "prometheus query failed: $prom"

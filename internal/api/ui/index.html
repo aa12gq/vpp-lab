@@ -396,6 +396,14 @@
         </div>
         <div id="commands"></div>
       </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>设备事件</h2>
+          <span id="event-count" class="pill">0 events</span>
+        </div>
+        <div id="events"></div>
+      </section>
     </section>
   </main>
 
@@ -529,6 +537,37 @@
         </table>`;
     }
 
+    function renderEvents(rows) {
+      const latest = rows.slice(0, 8);
+      $("event-count").textContent = `${rows.length} events`;
+      if (!latest.length) {
+        $("events").innerHTML = `<div class="empty">No device events yet.</div>`;
+        return;
+      }
+      $("events").innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Severity</th>
+              <th>Code</th>
+              <th>Message</th>
+              <th class="hide-sm">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map((row) => `
+              <tr>
+                <td><b>${esc(row.device_id)}</b></td>
+                <td class="${row.severity === "critical" ? "bad" : row.severity === "warning" ? "warn" : "good"}">${esc(row.severity || "info")}</td>
+                <td>${esc(row.code || "--")}</td>
+                <td title="${esc(row.message || "")}">${esc(row.message || "--")}</td>
+                <td class="hide-sm">${row.created_at ? new Date(row.created_at).toLocaleTimeString() : "--"}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+
     async function postCommand(deviceID, command) {
       const res = await fetch(`/api/v1/devices/${encodeURIComponent(deviceID)}/command`, {
         method: "POST",
@@ -600,12 +639,13 @@
       $("refresh").disabled = true;
       try {
         const s = site();
-        const [health, summary, devices, preview, commands] = await Promise.all([
+        const [health, summary, devices, preview, commands, events] = await Promise.all([
           getJSON("/healthz"),
           getJSON(`/api/v1/sites/${encodeURIComponent(s)}/summary`),
           getJSON(`/api/v1/sites/${encodeURIComponent(s)}/device-states`),
           getJSON(`/api/v1/sites/${encodeURIComponent(s)}/dispatch-preview`),
           getJSON("/api/v1/commands"),
+          getJSON("/api/v1/events"),
         ]);
         $("health-dot").classList.toggle("ok", health.status === "ok");
         $("health-text").textContent = `health ${health.status} · mqtt ${health.checks?.mqtt || "unknown"} · postgres ${health.checks?.postgres || "unknown"} · state ${health.checks?.state || "unknown"}`;
@@ -617,6 +657,7 @@
         renderDevices(devices);
         renderPreview(preview);
         renderCommands(commands);
+        renderEvents(events);
       } catch (err) {
         $("health-dot").classList.remove("ok");
         $("health-text").innerHTML = `<span class="error">${err.message}</span>`;

@@ -63,6 +63,21 @@ CREATE TABLE IF NOT EXISTS command_records (
 );
 CREATE INDEX IF NOT EXISTS idx_command_records_updated_at ON command_records (updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_command_records_device_id ON command_records (device_id);
+CREATE TABLE IF NOT EXISTS device_events (
+	event_id TEXT PRIMARY KEY,
+	site_id TEXT NOT NULL,
+	device_id TEXT NOT NULL,
+	device_type TEXT NOT NULL,
+	severity TEXT NOT NULL,
+	code TEXT NOT NULL,
+	message TEXT NOT NULL,
+	details JSONB NOT NULL DEFAULT '{}'::jsonb,
+	event_timestamp TIMESTAMPTZ NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_device_events_created_at ON device_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_device_events_device_id ON device_events (device_id);
+CREATE INDEX IF NOT EXISTS idx_device_events_severity ON device_events (severity);
 `)
 	return err
 }
