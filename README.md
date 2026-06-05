@@ -41,6 +41,8 @@ make smoke
 http://localhost:8080/
 ```
 
+控制台支持查看 summary、设备在线状态、调度预览、最近命令，并可对负载下发 ON/OFF、对电池下发 CHG/IDLE/DIS 模式命令。
+
 如果只想本机调试 Go 服务：
 
 ```bash
