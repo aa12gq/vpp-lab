@@ -48,6 +48,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/devices", s.listDevices)
 	mux.HandleFunc("POST /api/v1/devices", s.upsertDevice)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/summary", s.summary)
+	mux.HandleFunc("GET /api/v1/sites/{site_id}/device-states", s.deviceStates)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/plan", s.plan)
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/plan", s.customPlan)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/dispatch-preview", s.dispatchPreview)
@@ -130,6 +131,14 @@ func (s *Server) summary(w http.ResponseWriter, r *http.Request) {
 		siteID = s.siteID
 	}
 	writeJSON(w, http.StatusOK, s.store.Summary(siteID))
+}
+
+func (s *Server) deviceStates(w http.ResponseWriter, r *http.Request) {
+	siteID := r.PathValue("site_id")
+	if siteID == "" {
+		siteID = s.siteID
+	}
+	writeJSON(w, http.StatusOK, s.store.DeviceStates(siteID, time.Now(), metrics.DeviceOnlineTTL))
 }
 
 func (s *Server) plan(w http.ResponseWriter, r *http.Request) {

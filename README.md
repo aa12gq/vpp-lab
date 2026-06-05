@@ -58,12 +58,15 @@ curl http://localhost:8080/healthz
 curl http://localhost:8080/metrics
 curl http://localhost:8080/api/v1/devices
 curl http://localhost:8080/api/v1/sites/home-lab/summary
+curl http://localhost:8080/api/v1/sites/home-lab/device-states
 curl http://localhost:8080/api/v1/sites/home-lab/plan
 curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 curl http://localhost:8080/api/v1/commands
 ```
 
 `/healthz` 会检查 MQTT、PostgreSQL 和状态缓存；任一依赖异常时返回 HTTP 503。
+
+`/api/v1/sites/{site_id}/device-states` 返回每台设备的元信息、最新遥测、在线状态和 stale 秒数，适合给自建控制台直接使用。
 
 `/api/v1/commands` 返回最近 200 条命令记录。命令下发和设备回执会写入 PostgreSQL，服务重启后仍可查询。
 

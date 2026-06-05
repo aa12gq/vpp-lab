@@ -66,6 +66,14 @@ type SiteSummary struct {
 	LastUpdated  time.Time `json:"last_updated"`
 }
 
+type DeviceRuntimeState struct {
+	Device      Device     `json:"device"`
+	Telemetry   *Telemetry `json:"telemetry,omitempty"`
+	Online      bool       `json:"online"`
+	LastSeenAt  time.Time  `json:"last_seen_at,omitempty"`
+	StaleForSec int64      `json:"stale_for_sec"`
+}
+
 type Policy struct {
 	BatteryMinSOC     float64 `json:"battery_min_soc"`
 	BatteryMaxSOC     float64 `json:"battery_max_soc"`

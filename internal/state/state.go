@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -150,6 +151,39 @@ func (s *Store) Summary(siteID string) model.SiteSummary {
 	}
 	summary.NetPowerW = summary.LoadPowerW - summary.PVPowerW - summary.BatteryPower
 	return summary
+}
+
+func (s *Store) DeviceStates(siteID string, now time.Time, onlineTTL time.Duration) []model.DeviceRuntimeState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]model.DeviceRuntimeState, 0, len(s.devices))
+	for _, d := range s.devices {
+		if d.SiteID != siteID {
+			continue
+		}
+		state := model.DeviceRuntimeState{Device: d}
+		if tele, ok := s.telemetry[d.ID]; ok {
+			teleCopy := tele
+			state.Telemetry = &teleCopy
+			state.LastSeenAt = time.Unix(tele.Timestamp, 0)
+			if !state.LastSeenAt.IsZero() {
+				staleFor := now.Sub(state.LastSeenAt)
+				if staleFor < 0 {
+					staleFor = 0
+				}
+				state.StaleForSec = int64(staleFor.Seconds())
+				state.Online = staleFor <= onlineTTL
+			}
+		}
+		out = append(out, state)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Device.Type == out[j].Device.Type {
+			return out[i].Device.ID < out[j].Device.ID
+		}
+		return out[i].Device.Type < out[j].Device.Type
+	})
+	return out
 }
 
 func (s *Store) PutCommandIssued(siteID string, d model.Device, cmd model.Command) {
