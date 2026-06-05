@@ -44,6 +44,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/plan", s.customPlan)
 	mux.HandleFunc("GET /api/v1/sites/{site_id}/dispatch-preview", s.dispatchPreview)
 	mux.HandleFunc("POST /api/v1/sites/{site_id}/dispatch-preview", s.customDispatchPreview)
+	mux.HandleFunc("POST /api/v1/sites/{site_id}/dispatch/apply", s.applyDispatch)
 	mux.HandleFunc("GET /api/v1/commands", s.commands)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
@@ -133,6 +134,45 @@ func (s *Server) customDispatchPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, dispatch.BuildPreview(time.Now(), s.store.Summary(siteID), s.store.Devices(), cfg))
+}
+
+func (s *Server) applyDispatch(w http.ResponseWriter, r *http.Request) {
+	siteID := r.PathValue("site_id")
+	if siteID == "" {
+		siteID = s.siteID
+	}
+	var req dispatch.ApplyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	preview := dispatch.BuildPreview(time.Now(), s.store.Summary(siteID), s.store.Devices(), req.Config)
+	decision := dispatch.DecideApply(preview, req)
+	if !decision.CanApply {
+		writeJSON(w, http.StatusPreconditionFailed, decision)
+		return
+	}
+	d, ok := s.store.Device(preview.CandidateDeviceID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "candidate device not found")
+		return
+	}
+	cmd := *preview.CandidateCommand
+	cmd.CommandID = preview.CandidateDeviceID + "-" + time.Now().Format("20060102150405.000000000")
+	cmd.IssuedAt = time.Now().Unix()
+	cmd.Reason = "dispatch apply: " + cmd.Reason
+	if err := s.publisher.PublishCommand(siteID, d, cmd); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"applied":  true,
+		"reason":   decision.Reason,
+		"device":   d,
+		"command":  cmd,
+		"preview":  preview,
+		"decision": decision,
+	})
 }
 
 func (s *Server) commands(w http.ResponseWriter, _ *http.Request) {

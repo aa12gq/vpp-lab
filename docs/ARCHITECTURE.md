@@ -86,6 +86,13 @@ HTTP API / seed data -> PostgreSQL -> memory state
 - 生成候选控制命令
 - 默认 `safe_to_apply=false`，避免预览逻辑直接误控设备
 
+受控下发：
+
+- `dispatch/apply` 会重新计算当前预览，不接受客户端传入的命令体
+- 请求必须显式传入 `confirm:true`
+- 可通过 `max_abs_tracking_error_w` 限制实时偏差
+- 通过校验后才发布 MQTT 控制命令
+
 ## 阶段 5 扩展点
 
 - `internal/state` 替换为 Redis

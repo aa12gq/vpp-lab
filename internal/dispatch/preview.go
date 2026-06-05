@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"vpp-lab/internal/model"
@@ -19,6 +20,18 @@ type Preview struct {
 	SafeToApply       bool              `json:"safe_to_apply"`
 	Reason            string            `json:"reason"`
 	Plan              optimizer.Plan    `json:"plan"`
+}
+
+type ApplyRequest struct {
+	Confirm              bool             `json:"confirm"`
+	MaxAbsTrackingErrorW float64          `json:"max_abs_tracking_error_w"`
+	Config               optimizer.Config `json:"config"`
+}
+
+type ApplyDecision struct {
+	CanApply bool    `json:"can_apply"`
+	Reason   string  `json:"reason"`
+	Preview  Preview `json:"preview"`
 }
 
 func BuildPreview(now time.Time, summary model.SiteSummary, devices []model.Device, cfg optimizer.Config) Preview {
@@ -62,6 +75,29 @@ func BuildPreview(now time.Time, summary model.SiteSummary, devices []model.Devi
 	}
 	preview.Reason = "candidate command generated from active plan slot"
 	return preview
+}
+
+func DecideApply(preview Preview, req ApplyRequest) ApplyDecision {
+	decision := ApplyDecision{Preview: preview}
+	if !req.Confirm {
+		decision.Reason = "confirm must be true"
+		return decision
+	}
+	if preview.CandidateCommand == nil || preview.CandidateDeviceID == "" {
+		decision.Reason = "no candidate command"
+		return decision
+	}
+	maxErr := req.MaxAbsTrackingErrorW
+	if maxErr == 0 {
+		maxErr = 100
+	}
+	if math.Abs(preview.TrackingErrorW) > maxErr {
+		decision.Reason = fmt.Sprintf("tracking error %.2fW exceeds limit %.2fW", preview.TrackingErrorW, maxErr)
+		return decision
+	}
+	decision.CanApply = true
+	decision.Reason = "confirmed and within tracking error limit"
+	return decision
 }
 
 func firstDevice(devices []model.Device, siteID string, typ model.DeviceType) (model.Device, bool) {

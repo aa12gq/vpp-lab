@@ -80,6 +80,27 @@ curl http://localhost:8080/api/v1/sites/home-lab/dispatch-preview
 
 `safe_to_apply=false` 表示当前只是调度建议，不会自动下发到设备。
 
+显式确认后按当前计划预览下发命令：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sites/home-lab/dispatch/apply \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "confirm": true,
+    "max_abs_tracking_error_w": 100,
+    "config": {
+      "horizon_hours": 24,
+      "slot_minutes": 15,
+      "battery_capacity_wh": 150,
+      "battery_power_limit_w": 50,
+      "min_soc": 0.25,
+      "max_soc": 0.9
+    }
+  }'
+```
+
+这个接口会重新计算当前时隙预览，只允许服务端生成的候选命令下发。没有 `confirm:true`、没有候选命令、或偏差超过 `max_abs_tracking_error_w` 时都会拒绝。
+
 Grafana：
 
 - URL: http://localhost:3000

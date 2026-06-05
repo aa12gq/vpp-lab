@@ -43,3 +43,24 @@ func TestBuildPreviewSkipsWithoutBattery(t *testing.T) {
 		t.Fatal("expected no candidate command")
 	}
 }
+
+func TestDecideApplyRequiresConfirm(t *testing.T) {
+	decision := DecideApply(Preview{
+		CandidateDeviceID: "battery_01",
+		CandidateCommand:  &model.Command{Action: "set_mode"},
+	}, ApplyRequest{})
+	if decision.CanApply {
+		t.Fatal("expected apply rejected without confirm")
+	}
+}
+
+func TestDecideApplyRejectsLargeTrackingError(t *testing.T) {
+	decision := DecideApply(Preview{
+		CandidateDeviceID: "battery_01",
+		CandidateCommand:  &model.Command{Action: "set_mode"},
+		TrackingErrorW:    200,
+	}, ApplyRequest{Confirm: true, MaxAbsTrackingErrorW: 50})
+	if decision.CanApply {
+		t.Fatal("expected apply rejected by tracking error limit")
+	}
+}
