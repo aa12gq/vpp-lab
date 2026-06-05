@@ -32,6 +32,7 @@ Compose 已配置健康检查和启动顺序；查看状态：
 
 ```bash
 docker compose ps
+make smoke
 ```
 
 如果只想本机调试 Go 服务：
