@@ -27,6 +27,12 @@ docker compose up -d
 
 这会启动 EMQX、InfluxDB、PostgreSQL、Redis、Go 平台服务、simulator、Prometheus 和 Grafana。
 
+Compose 已配置健康检查和启动顺序；查看状态：
+
+```bash
+docker compose ps
+```
+
 如果只想本机调试 Go 服务：
 
 ```bash

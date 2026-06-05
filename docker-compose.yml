@@ -7,6 +7,11 @@ services:
     environment:
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: public
+    healthcheck:
+      test: ["CMD-SHELL", "emqx ctl status >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   influxdb:
     image: influxdb:2.7
@@ -21,6 +26,11 @@ services:
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: vpp-lab-token
     volumes:
       - ./data/influxdb:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   postgres:
     image: postgres:16
@@ -32,11 +42,21 @@ services:
       POSTGRES_DB: vpp
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vpp -d vpp"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -48,9 +68,16 @@ services:
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning
       - ./data/grafana:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
-      - influxdb
-      - prometheus
+      influxdb:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -63,8 +90,14 @@ services:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/rules:/etc/prometheus/rules:ro
       - ./data/prometheus:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9090/-/healthy >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
   app:
     build:
@@ -79,10 +112,18 @@ services:
     ports:
       - "8080:8080"
     restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8080/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
-      - emqx
-      - influxdb
-      - postgres
+      emqx:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   simulator:
     build:
@@ -93,6 +134,13 @@ services:
       MQTT_BROKER: tcp://emqx:1883
       SITE_ID: home-lab
     restart: on-failure
+    healthcheck:
+      test: ["CMD", "pidof", "simulator"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
-      - emqx
-      - app
+      emqx:
+        condition: service_healthy
+      app:
+        condition: service_healthy

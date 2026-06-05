@@ -114,6 +114,7 @@ API / scheduler / dispatch apply
 - Grafana 自动配置 InfluxDB 和 Prometheus 两个数据源
 - Grafana 内置 Overview 和 Operations 两个 dashboard
 - Docker Compose 内置 simulator 服务，用于一键演示完整数据闭环
+- Docker Compose 使用 healthcheck 和 `service_healthy` 降低启动竞态
 
 ## 阶段 5 扩展点
 

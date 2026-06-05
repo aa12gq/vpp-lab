@@ -8,6 +8,7 @@
 - Grafana 查看功率曲线
 - HTTP API 下发继电器控制命令
 - Docker Compose 一键启动完整演示：已完成
+- Docker Compose 健康检查和启动顺序：已完成
 
 ## 阶段 2：多设备聚合
 
