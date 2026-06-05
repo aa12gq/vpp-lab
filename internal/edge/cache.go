@@ -21,8 +21,9 @@ type Cache struct {
 }
 
 type CacheStats struct {
-	Pending int64 `json:"pending"`
-	Total   int64 `json:"total"`
+	Pending         int64      `json:"pending"`
+	Total           int64      `json:"total"`
+	OldestPendingAt *time.Time `json:"oldest_pending_at,omitempty"`
 }
 
 func OpenCache(ctx context.Context, path string) (*Cache, error) {
@@ -94,6 +95,14 @@ func (c *Cache) MarkSent(ctx context.Context, id int64) error {
 	return err
 }
 
+func (c *Cache) DeleteSentBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	result, err := c.db.ExecContext(ctx, `DELETE FROM mqtt_messages WHERE sent_at IS NOT NULL AND sent_at < ?`, cutoff.UTC())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 func (c *Cache) Stats(ctx context.Context) (CacheStats, error) {
 	var stats CacheStats
 	if err := c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mqtt_messages WHERE sent_at IS NULL`).Scan(&stats.Pending); err != nil {
@@ -101,6 +110,18 @@ func (c *Cache) Stats(ctx context.Context) (CacheStats, error) {
 	}
 	if err := c.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mqtt_messages`).Scan(&stats.Total); err != nil {
 		return CacheStats{}, err
+	}
+	var oldest sql.NullTime
+	if err := c.db.QueryRowContext(ctx, `
+SELECT created_at
+FROM mqtt_messages
+WHERE sent_at IS NULL
+ORDER BY id ASC
+LIMIT 1`).Scan(&oldest); err != nil && err != sql.ErrNoRows {
+		return CacheStats{}, err
+	}
+	if oldest.Valid {
+		stats.OldestPendingAt = &oldest.Time
 	}
 	return stats, nil
 }

@@ -51,13 +51,15 @@ http://localhost:8080/
 make docker-edge
 ```
 
-它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。默认只捕获 `telemetry,event,status`，可用 `EDGE_CAPTURE_KINDS` 调整。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT；本地用同一个 broker 验证转发时建议设置 `EDGE_UPSTREAM_TOPIC_PREFIX`，避免转发消息再次被本地订阅捕获形成回环。管理端口默认是 `http://localhost:8081`：
+它会订阅本地 MQTT 上行消息并写入 `data/edge-gateway/cache.db`。默认只捕获 `telemetry,event,status`，可用 `EDGE_CAPTURE_KINDS` 调整。设置 `EDGE_UPSTREAM_BROKER` 后可把未发送消息转发到上游 MQTT；本地用同一个 broker 验证转发时建议设置 `EDGE_UPSTREAM_TOPIC_PREFIX`，避免转发消息再次被本地订阅捕获形成回环。已发送消息默认保留 24 小时，可用 `EDGE_CACHE_RETENTION` 调整，设为 `0` 可关闭清理；`EDGE_CLEANUP_INTERVAL` 控制清理周期。管理端口默认是 `http://localhost:8081`：
 
 ```bash
 curl http://localhost:8081/healthz
 curl http://localhost:8081/api/v1/cache/stats
 curl http://localhost:8081/metrics
 ```
+
+`/api/v1/cache/stats` 会返回 `pending`、`total` 和可选的 `oldest_pending_at`；`/metrics` 会暴露待发送消息数、总缓存数、最老待发送消息年龄和 MQTT 连接状态。
 
 如果只想本机调试 Go 服务：
 

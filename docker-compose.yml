@@ -161,6 +161,8 @@ services:
       EDGE_LOCAL_BROKER: tcp://emqx:1883
       EDGE_CACHE_PATH: /data/cache.db
       EDGE_FLUSH_INTERVAL: 5s
+      EDGE_CACHE_RETENTION: 24h
+      EDGE_CLEANUP_INTERVAL: 1h
       EDGE_HTTP_ADDR: :8081
       EDGE_CAPTURE_KINDS: telemetry,event,status
       EDGE_UPSTREAM_TOPIC_PREFIX: ${EDGE_UPSTREAM_TOPIC_PREFIX:-}

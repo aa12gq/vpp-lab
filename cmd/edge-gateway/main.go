@@ -28,6 +28,8 @@ func main() {
 	upstreamBroker := getenv("EDGE_UPSTREAM_BROKER", "")
 	cachePath := getenv("EDGE_CACHE_PATH", "./data/edge-gateway/cache.db")
 	flushInterval := getdur("EDGE_FLUSH_INTERVAL", 5*time.Second)
+	cacheRetention := getdur("EDGE_CACHE_RETENTION", 24*time.Hour)
+	cleanupInterval := getdur("EDGE_CLEANUP_INTERVAL", time.Hour)
 	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
 	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status"))
 	upstreamTopicPrefix := strings.Trim(getenv("EDGE_UPSTREAM_TOPIC_PREFIX", ""), "/")
@@ -37,6 +39,12 @@ func main() {
 		log.Fatalf("open edge cache: %v", err)
 	}
 	defer cache.Close()
+	if cacheRetention > 0 && cleanupInterval > 0 {
+		go cleanupLoop(ctx, cache, cacheRetention, cleanupInterval)
+		log.Printf("edge cache cleanup enabled retention=%s interval=%s", cacheRetention, cleanupInterval)
+	} else {
+		log.Printf("edge cache cleanup disabled retention=%s interval=%s", cacheRetention, cleanupInterval)
+	}
 
 	local := newMQTTClient(localBroker, getenv("EDGE_LOCAL_CLIENT_ID", "vpp-edge-gateway-local"), func(_ paho.Client, msg paho.Message) {
 		parsed, ok := topic.Parse(msg.Topic())
@@ -76,7 +84,7 @@ func main() {
 
 	httpSrv := &http.Server{
 		Addr:              httpAddr,
-		Handler:           edgeHTTPHandler(cache, local, upstream),
+		Handler:           edgeHTTPHandler(cache, local, upstream, cacheRetention),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -92,7 +100,7 @@ func main() {
 	_ = httpSrv.Shutdown(shutdownCtx)
 }
 
-func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client) http.Handler {
+func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client, cacheRetention time.Duration) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusOK
@@ -127,6 +135,12 @@ func edgeHTTPHandler(cache *edge.Cache, local paho.Client, upstream paho.Client)
 		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_cache_messages gauge\n")
 		_, _ = fmt.Fprintf(w, "vpp_edge_cache_messages{state=\"pending\"} %d\n", stats.Pending)
 		_, _ = fmt.Fprintf(w, "vpp_edge_cache_messages{state=\"total\"} %d\n", stats.Total)
+		_, _ = fmt.Fprintf(w, "# HELP vpp_edge_cache_oldest_pending_age_seconds Age of the oldest pending edge cache message.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_cache_oldest_pending_age_seconds gauge\n")
+		_, _ = fmt.Fprintf(w, "vpp_edge_cache_oldest_pending_age_seconds %.0f\n", oldestPendingAgeSeconds(stats.OldestPendingAt))
+		_, _ = fmt.Fprintf(w, "# HELP vpp_edge_cache_retention_seconds Edge cache retention for sent messages.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_cache_retention_seconds gauge\n")
+		_, _ = fmt.Fprintf(w, "vpp_edge_cache_retention_seconds %.0f\n", cacheRetention.Seconds())
 		_, _ = fmt.Fprintf(w, "# HELP vpp_edge_mqtt_connected Edge MQTT connection state.\n")
 		_, _ = fmt.Fprintf(w, "# TYPE vpp_edge_mqtt_connected gauge\n")
 		_, _ = fmt.Fprintf(w, "vpp_edge_mqtt_connected{side=\"local\"} %.0f\n", boolFloat(local != nil && local.IsConnected()))
@@ -146,6 +160,42 @@ func boolFloat(ok bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func oldestPendingAgeSeconds(at *time.Time) float64 {
+	if at == nil {
+		return 0
+	}
+	age := time.Since(*at)
+	if age < 0 {
+		return 0
+	}
+	return age.Seconds()
+}
+
+func cleanupLoop(ctx context.Context, cache *edge.Cache, retention time.Duration, interval time.Duration) {
+	cleanupSent(ctx, cache, retention)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleanupSent(ctx, cache, retention)
+		}
+	}
+}
+
+func cleanupSent(ctx context.Context, cache *edge.Cache, retention time.Duration) {
+	deleted, err := cache.DeleteSentBefore(ctx, time.Now().UTC().Add(-retention))
+	if err != nil {
+		log.Printf("edge cache cleanup failed: %v", err)
+		return
+	}
+	if deleted > 0 {
+		log.Printf("edge cache cleanup deleted=%d", deleted)
+	}
 }
 
 func flushLoop(ctx context.Context, cache *edge.Cache, upstream paho.Client, interval time.Duration, topicPrefix string) {
