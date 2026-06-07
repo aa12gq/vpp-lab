@@ -1,22 +1,22 @@
 /*
-  VPP Lab — ESP32 Load Node Firmware.
-  Replaces simulator load_01/load_02 with a real relay + INA226 power monitor.
+  VPP Lab — ESP32 PV Node Firmware.
+  Replaces simulator pv_01/pv_02 with real INA226 power monitoring.
 
   Arduino Library Manager dependencies:
     - PubSubClient
     - ArduinoJson
 
   Hardware:
-    - Relay/MOSFET on GPIO5 (active HIGH)
-    - Status LED on GPIO2
     - INA226 on I2C (SDA=GPIO21, SCL=GPIO22), addr 0x40
+    - Status LED on GPIO2
+    - (Optional) Curtailment MOSFET on GPIO5
 
   Dev note:
     PlatformIO: this include works as-is.
     Arduino IDE: copy ../esp32-common/vpp_common.h into this folder,
     then change to #include "vpp_common.h".
 */
-#include "../esp32-common/vpp_common.h"
+#include "../../esp32-common/vpp_common.h"
 
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -34,8 +34,8 @@ const char *mqttUsername  = "";
 const char *mqttPassword  = "";
 
 const char *siteId        = "home-lab";
-const char *deviceType    = "load";
-const char *deviceId      = "load_02";
+const char *deviceType    = "pv";
+const char *deviceId      = "pv_01";
 
 // ═══════════════════════════════════════════
 // Auth config — set DEVICE_SECRET to enable HMAC signing
@@ -47,9 +47,8 @@ const char *deviceId      = "load_02";
 // Hardware config
 // ═══════════════════════════════════════════
 
-const int   relayPin      = 5;
-const int   ledPin        = 2;
-const bool  relayActiveHigh = true;
+const int ledPin           = 2;
+const int curtailPin       = 5;    // MOSFET for PV curtailment (optional)
 
 // ═══════════════════════════════════════════
 // Globals
@@ -59,9 +58,9 @@ WiFiClient   wifiClient;
 PubSubClient mqtt(wifiClient);
 INA226       ina;
 
-uint64_t     seq       = 0;
-bool         relayOn   = false;
-unsigned long lastPubMs = 0;
+uint64_t      seq         = 0;
+bool          curtailed   = false;  // true = PV disconnected/curtailed
+unsigned long lastPubMs   = 0;
 
 // ═══════════════════════════════════════════
 // Topic helpers
@@ -77,16 +76,16 @@ String topicStatus()    { return mqttTopicStatus(siteId, deviceType, deviceId); 
 // ═══════════════════════════════════════════
 
 void setup() {
-  pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
-  setRelay(false);
+  pinMode(curtailPin, OUTPUT);
+  setCurtail(false);
 
   Serial.begin(115200);
   delay(200);
 
   Wire.begin(21, 22);
   if (!ina.begin()) {
-    Serial.println("INA226 not found — telemetry will use fallback values");
+    Serial.println("INA226 not found — fallback to zero readings");
   } else {
     Serial.println("INA226 detected");
   }
@@ -181,11 +180,11 @@ void reconnectMQTT() {
 void publishTelemetry() {
   seq++;
 
-  float voltage = 12.0;
-  float current = relayOn ? 1.2 : 0.0;
-  float power   = voltage * current;
+  float voltage = 0.0;
+  float current = 0.0;
+  float power   = 0.0;
 
-  if (ina.begin()) {  // re-probe in case it was missing at boot
+  if (ina.begin()) {
     voltage = ina.readBusVoltage_V();
     current = ina.readCurrent_A();
     power   = ina.readPower_W();
@@ -194,13 +193,15 @@ void publishTelemetry() {
   StaticJsonDocument<512> doc;
   doc["device_id"] = deviceId;
   doc["timestamp"] = nowUnix();
-  doc["state"]     = relayOn ? "on" : "off";
+  doc["state"]     = curtailed ? "curtailed" : "generating";
   doc["seq"]       = seq;
 
   JsonObject m = doc.createNestedObject("metrics");
-  m["voltage"] = voltage;
-  m["current"] = current;
-  m["power"]   = power;
+  m["voltage"]     = voltage;
+  m["current"]     = current;
+  m["power"]       = power;
+  m["energy_wh"]   = 0;   // TODO: integrate over time if needed
+  m["curtailed"]   = curtailed;
 
   publishJSON(topicTelemetry(), doc, true);
 }
@@ -244,9 +245,9 @@ void onMessage(char *rawTopic, byte *payload, unsigned int length) {
   const char *commandId = doc["command_id"] | "";
   const char *action    = doc["action"] | "";
 
-  if (strcmp(action, "set_relay") == 0) {
+  if (strcmp(action, "set_curtail") == 0) {
     bool on = doc["params"]["on"] | false;
-    setRelay(on);
+    setCurtail(on);
     publishAck(commandId, true, "");
     publishTelemetry();
     return;
@@ -280,18 +281,17 @@ void publishJSON(const String &topic, JsonDocument &doc, bool sign) {
 }
 
 // ═══════════════════════════════════════════
-// Relay control
+// Curtailment control
 // ═══════════════════════════════════════════
 
-void setRelay(bool on) {
-  relayOn = on;
-  digitalWrite(relayPin, relayActiveHigh ? (on ? HIGH : LOW)
-                                         : (on ? LOW : HIGH));
-  digitalWrite(ledPin, on ? HIGH : LOW);
+void setCurtail(bool on) {
+  curtailed = on;
+  digitalWrite(curtailPin, on ? HIGH : LOW);
+  digitalWrite(ledPin, on ? LOW : HIGH);
 }
 
 // ═══════════════════════════════════════════
-// Unix timestamp (fallback to millis if NTP not ready)
+// Unix timestamp
 // ═══════════════════════════════════════════
 
 long nowUnix() {

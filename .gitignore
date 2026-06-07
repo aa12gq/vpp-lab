@@ -7,3 +7,6 @@ dist/
 /edge-gateway
 *.log
 .DS_Store
+
+# PlatformIO build artifacts
+firmware/**/.pio/

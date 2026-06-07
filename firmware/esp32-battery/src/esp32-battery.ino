@@ -1,6 +1,11 @@
 /*
-  VPP Lab — ESP32 PV Node Firmware.
-  Replaces simulator pv_01/pv_02 with real INA226 power monitoring.
+  VPP Lab — ESP32 Battery Node Firmware.
+  Replaces simulator battery_01 with real INA226 + charge/discharge control.
+
+  State machine:
+    idle        — neither charging nor discharging
+    charging    — charger MOSFET on, energy flows INTO battery
+    discharging — load MOSFET on, energy flows OUT OF battery
 
   Arduino Library Manager dependencies:
     - PubSubClient
@@ -8,15 +13,20 @@
 
   Hardware:
     - INA226 on I2C (SDA=GPIO21, SCL=GPIO22), addr 0x40
+    - Charge MOSFET on GPIO5 (active HIGH = charging enabled)
+    - Discharge MOSFET on GPIO4 (active HIGH = discharging enabled)
     - Status LED on GPIO2
-    - (Optional) Curtailment MOSFET on GPIO5
+
+  SOC estimation:
+    By default uses a simple voltage-to-SOC lookup for 3S Li-ion (12.6–9.0 V).
+    For more accurate SOC, connect a BMS with UART/I2C output.
 
   Dev note:
     PlatformIO: this include works as-is.
     Arduino IDE: copy ../esp32-common/vpp_common.h into this folder,
     then change to #include "vpp_common.h".
 */
-#include "../esp32-common/vpp_common.h"
+#include "../../esp32-common/vpp_common.h"
 
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -34,8 +44,8 @@ const char *mqttUsername  = "";
 const char *mqttPassword  = "";
 
 const char *siteId        = "home-lab";
-const char *deviceType    = "pv";
-const char *deviceId      = "pv_01";
+const char *deviceType    = "battery";
+const char *deviceId      = "battery_01";
 
 // ═══════════════════════════════════════════
 // Auth config — set DEVICE_SECRET to enable HMAC signing
@@ -48,7 +58,16 @@ const char *deviceId      = "pv_01";
 // ═══════════════════════════════════════════
 
 const int ledPin           = 2;
-const int curtailPin       = 5;    // MOSFET for PV curtailment (optional)
+const int chargePin        = 5;   // MOSFET: HIGH = charging allowed
+const int dischargePin     = 4;   // MOSFET: HIGH = discharging allowed
+
+// ═══════════════════════════════════════════
+// Battery parameters — edit for your chemistry
+// ═══════════════════════════════════════════
+
+const float batteryFullV    = 12.6;   // 3S Li-ion full
+const float batteryEmptyV   = 9.0;    // 3S Li-ion empty
+const float ratedCapacityAh = 10.0;   // nominal capacity
 
 // ═══════════════════════════════════════════
 // Globals
@@ -58,9 +77,11 @@ WiFiClient   wifiClient;
 PubSubClient mqtt(wifiClient);
 INA226       ina;
 
-uint64_t      seq         = 0;
-bool          curtailed   = false;  // true = PV disconnected/curtailed
-unsigned long lastPubMs   = 0;
+uint64_t      seq             = 0;
+unsigned long lastPubMs       = 0;
+
+const char *modeNames[3] = {"idle", "charging", "discharging"};
+int8_t       mode         = 0;  // 0=idle, 1=charging, 2=discharging
 
 // ═══════════════════════════════════════════
 // Topic helpers
@@ -77,15 +98,16 @@ String topicStatus()    { return mqttTopicStatus(siteId, deviceType, deviceId); 
 
 void setup() {
   pinMode(ledPin, OUTPUT);
-  pinMode(curtailPin, OUTPUT);
-  setCurtail(false);
+  pinMode(chargePin, OUTPUT);
+  pinMode(dischargePin, OUTPUT);
+  setMode(0);   // start idle
 
   Serial.begin(115200);
   delay(200);
 
   Wire.begin(21, 22);
   if (!ina.begin()) {
-    Serial.println("INA226 not found — fallback to zero readings");
+    Serial.println("INA226 not found — fallback readings");
   } else {
     Serial.println("INA226 detected");
   }
@@ -174,6 +196,17 @@ void reconnectMQTT() {
 }
 
 // ═══════════════════════════════════════════
+// SOC estimation (voltage-based, 3S Li-ion)
+// ═══════════════════════════════════════════
+
+float estimateSOC(float voltage) {
+  if (voltage >= batteryFullV)  return 100.0;
+  if (voltage <= batteryEmptyV) return 0.0;
+  // linear interpolation; replace with lookup table for better accuracy
+  return (voltage - batteryEmptyV) / (batteryFullV - batteryEmptyV) * 100.0;
+}
+
+// ═══════════════════════════════════════════
 // Telemetry
 // ═══════════════════════════════════════════
 
@@ -186,22 +219,24 @@ void publishTelemetry() {
 
   if (ina.begin()) {
     voltage = ina.readBusVoltage_V();
-    current = ina.readCurrent_A();
+    current = ina.readCurrent_A();   // positive = charging, negative = discharging
     power   = ina.readPower_W();
   }
+
+  float soc = estimateSOC(voltage);
 
   StaticJsonDocument<512> doc;
   doc["device_id"] = deviceId;
   doc["timestamp"] = nowUnix();
-  doc["state"]     = curtailed ? "curtailed" : "generating";
+  doc["state"]     = modeNames[mode];
   doc["seq"]       = seq;
 
   JsonObject m = doc.createNestedObject("metrics");
-  m["voltage"]     = voltage;
-  m["current"]     = current;
-  m["power"]       = power;
-  m["energy_wh"]   = 0;   // TODO: integrate over time if needed
-  m["curtailed"]   = curtailed;
+  m["voltage"]        = voltage;
+  m["current"]        = current;
+  m["power"]          = power;
+  m["soc_pct"]        = soc;
+  m["capacity_ah"]    = ratedCapacityAh;
 
   publishJSON(topicTelemetry(), doc, true);
 }
@@ -245,9 +280,21 @@ void onMessage(char *rawTopic, byte *payload, unsigned int length) {
   const char *commandId = doc["command_id"] | "";
   const char *action    = doc["action"] | "";
 
-  if (strcmp(action, "set_curtail") == 0) {
-    bool on = doc["params"]["on"] | false;
-    setCurtail(on);
+  if (strcmp(action, "set_mode") == 0) {
+    const char *m = doc["params"]["mode"] | "";
+    int8_t newMode = -1;
+    if      (strcmp(m, "idle")       == 0) newMode = 0;
+    else if (strcmp(m, "charging")   == 0) newMode = 1;
+    else if (strcmp(m, "discharging")== 0) newMode = 2;
+
+    if (newMode < 0) {
+      publishAck(commandId, false, "invalid mode (use idle/charging/discharging)");
+      return;
+    }
+
+    // Safety: prevent simultaneous charge+discharge
+    // (the GPIO logic already prevents this since only one MOSFET fires)
+    setMode(newMode);
     publishAck(commandId, true, "");
     publishTelemetry();
     return;
@@ -281,13 +328,15 @@ void publishJSON(const String &topic, JsonDocument &doc, bool sign) {
 }
 
 // ═══════════════════════════════════════════
-// Curtailment control
+// Mode control
 // ═══════════════════════════════════════════
 
-void setCurtail(bool on) {
-  curtailed = on;
-  digitalWrite(curtailPin, on ? HIGH : LOW);
-  digitalWrite(ledPin, on ? LOW : HIGH);
+void setMode(int8_t newMode) {
+  mode = newMode;
+  digitalWrite(chargePin,    (mode == 1) ? HIGH : LOW);
+  digitalWrite(dischargePin, (mode == 2) ? HIGH : LOW);
+  digitalWrite(ledPin,       (mode != 0) ? HIGH : LOW);
+  Serial.printf("battery mode=%s\n", modeNames[mode]);
 }
 
 // ═══════════════════════════════════════════

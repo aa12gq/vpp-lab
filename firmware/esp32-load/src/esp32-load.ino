@@ -1,32 +1,22 @@
 /*
-  VPP Lab — ESP32 Battery Node Firmware.
-  Replaces simulator battery_01 with real INA226 + charge/discharge control.
-
-  State machine:
-    idle        — neither charging nor discharging
-    charging    — charger MOSFET on, energy flows INTO battery
-    discharging — load MOSFET on, energy flows OUT OF battery
+  VPP Lab — ESP32 Load Node Firmware.
+  Replaces simulator load_01/load_02 with a real relay + INA226 power monitor.
 
   Arduino Library Manager dependencies:
     - PubSubClient
     - ArduinoJson
 
   Hardware:
-    - INA226 on I2C (SDA=GPIO21, SCL=GPIO22), addr 0x40
-    - Charge MOSFET on GPIO5 (active HIGH = charging enabled)
-    - Discharge MOSFET on GPIO4 (active HIGH = discharging enabled)
+    - Relay/MOSFET on GPIO5 (active HIGH)
     - Status LED on GPIO2
-
-  SOC estimation:
-    By default uses a simple voltage-to-SOC lookup for 3S Li-ion (12.6–9.0 V).
-    For more accurate SOC, connect a BMS with UART/I2C output.
+    - INA226 on I2C (SDA=GPIO21, SCL=GPIO22), addr 0x40
 
   Dev note:
     PlatformIO: this include works as-is.
     Arduino IDE: copy ../esp32-common/vpp_common.h into this folder,
     then change to #include "vpp_common.h".
 */
-#include "../esp32-common/vpp_common.h"
+#include "../../esp32-common/vpp_common.h"
 
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -44,8 +34,8 @@ const char *mqttUsername  = "";
 const char *mqttPassword  = "";
 
 const char *siteId        = "home-lab";
-const char *deviceType    = "battery";
-const char *deviceId      = "battery_01";
+const char *deviceType    = "load";
+const char *deviceId      = "load_02";
 
 // ═══════════════════════════════════════════
 // Auth config — set DEVICE_SECRET to enable HMAC signing
@@ -57,17 +47,9 @@ const char *deviceId      = "battery_01";
 // Hardware config
 // ═══════════════════════════════════════════
 
-const int ledPin           = 2;
-const int chargePin        = 5;   // MOSFET: HIGH = charging allowed
-const int dischargePin     = 4;   // MOSFET: HIGH = discharging allowed
-
-// ═══════════════════════════════════════════
-// Battery parameters — edit for your chemistry
-// ═══════════════════════════════════════════
-
-const float batteryFullV    = 12.6;   // 3S Li-ion full
-const float batteryEmptyV   = 9.0;    // 3S Li-ion empty
-const float ratedCapacityAh = 10.0;   // nominal capacity
+const int   relayPin      = 5;
+const int   ledPin        = 2;
+const bool  relayActiveHigh = true;
 
 // ═══════════════════════════════════════════
 // Globals
@@ -77,11 +59,9 @@ WiFiClient   wifiClient;
 PubSubClient mqtt(wifiClient);
 INA226       ina;
 
-uint64_t      seq             = 0;
-unsigned long lastPubMs       = 0;
-
-const char *modeNames[3] = {"idle", "charging", "discharging"};
-int8_t       mode         = 0;  // 0=idle, 1=charging, 2=discharging
+uint64_t     seq       = 0;
+bool         relayOn   = false;
+unsigned long lastPubMs = 0;
 
 // ═══════════════════════════════════════════
 // Topic helpers
@@ -97,17 +77,16 @@ String topicStatus()    { return mqttTopicStatus(siteId, deviceType, deviceId); 
 // ═══════════════════════════════════════════
 
 void setup() {
+  pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
-  pinMode(chargePin, OUTPUT);
-  pinMode(dischargePin, OUTPUT);
-  setMode(0);   // start idle
+  setRelay(false);
 
   Serial.begin(115200);
   delay(200);
 
   Wire.begin(21, 22);
   if (!ina.begin()) {
-    Serial.println("INA226 not found — fallback readings");
+    Serial.println("INA226 not found — telemetry will use fallback values");
   } else {
     Serial.println("INA226 detected");
   }
@@ -196,47 +175,32 @@ void reconnectMQTT() {
 }
 
 // ═══════════════════════════════════════════
-// SOC estimation (voltage-based, 3S Li-ion)
-// ═══════════════════════════════════════════
-
-float estimateSOC(float voltage) {
-  if (voltage >= batteryFullV)  return 100.0;
-  if (voltage <= batteryEmptyV) return 0.0;
-  // linear interpolation; replace with lookup table for better accuracy
-  return (voltage - batteryEmptyV) / (batteryFullV - batteryEmptyV) * 100.0;
-}
-
-// ═══════════════════════════════════════════
 // Telemetry
 // ═══════════════════════════════════════════
 
 void publishTelemetry() {
   seq++;
 
-  float voltage = 0.0;
-  float current = 0.0;
-  float power   = 0.0;
+  float voltage = 12.0;
+  float current = relayOn ? 1.2 : 0.0;
+  float power   = voltage * current;
 
-  if (ina.begin()) {
+  if (ina.begin()) {  // re-probe in case it was missing at boot
     voltage = ina.readBusVoltage_V();
-    current = ina.readCurrent_A();   // positive = charging, negative = discharging
+    current = ina.readCurrent_A();
     power   = ina.readPower_W();
   }
-
-  float soc = estimateSOC(voltage);
 
   StaticJsonDocument<512> doc;
   doc["device_id"] = deviceId;
   doc["timestamp"] = nowUnix();
-  doc["state"]     = modeNames[mode];
+  doc["state"]     = relayOn ? "on" : "off";
   doc["seq"]       = seq;
 
   JsonObject m = doc.createNestedObject("metrics");
-  m["voltage"]        = voltage;
-  m["current"]        = current;
-  m["power"]          = power;
-  m["soc_pct"]        = soc;
-  m["capacity_ah"]    = ratedCapacityAh;
+  m["voltage"] = voltage;
+  m["current"] = current;
+  m["power"]   = power;
 
   publishJSON(topicTelemetry(), doc, true);
 }
@@ -280,21 +244,9 @@ void onMessage(char *rawTopic, byte *payload, unsigned int length) {
   const char *commandId = doc["command_id"] | "";
   const char *action    = doc["action"] | "";
 
-  if (strcmp(action, "set_mode") == 0) {
-    const char *m = doc["params"]["mode"] | "";
-    int8_t newMode = -1;
-    if      (strcmp(m, "idle")       == 0) newMode = 0;
-    else if (strcmp(m, "charging")   == 0) newMode = 1;
-    else if (strcmp(m, "discharging")== 0) newMode = 2;
-
-    if (newMode < 0) {
-      publishAck(commandId, false, "invalid mode (use idle/charging/discharging)");
-      return;
-    }
-
-    // Safety: prevent simultaneous charge+discharge
-    // (the GPIO logic already prevents this since only one MOSFET fires)
-    setMode(newMode);
+  if (strcmp(action, "set_relay") == 0) {
+    bool on = doc["params"]["on"] | false;
+    setRelay(on);
     publishAck(commandId, true, "");
     publishTelemetry();
     return;
@@ -328,19 +280,18 @@ void publishJSON(const String &topic, JsonDocument &doc, bool sign) {
 }
 
 // ═══════════════════════════════════════════
-// Mode control
+// Relay control
 // ═══════════════════════════════════════════
 
-void setMode(int8_t newMode) {
-  mode = newMode;
-  digitalWrite(chargePin,    (mode == 1) ? HIGH : LOW);
-  digitalWrite(dischargePin, (mode == 2) ? HIGH : LOW);
-  digitalWrite(ledPin,       (mode != 0) ? HIGH : LOW);
-  Serial.printf("battery mode=%s\n", modeNames[mode]);
+void setRelay(bool on) {
+  relayOn = on;
+  digitalWrite(relayPin, relayActiveHigh ? (on ? HIGH : LOW)
+                                         : (on ? LOW : HIGH));
+  digitalWrite(ledPin, on ? HIGH : LOW);
 }
 
 // ═══════════════════════════════════════════
-// Unix timestamp
+// Unix timestamp (fallback to millis if NTP not ready)
 // ═══════════════════════════════════════════
 
 long nowUnix() {
