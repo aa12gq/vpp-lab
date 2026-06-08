@@ -70,21 +70,32 @@ func main() {
 		pvPower := math.Max(0, 90*math.Sin((h-6)/12*math.Pi))
 		load1 := 25 + 5*math.Sin(float64(seq)/10)
 		load2 := 45 + 10*math.Sin(float64(seq)/7)
+		if !sim.relayOn("load_01") {
+			load1 = 0
+		}
 		if !sim.relayOn("load_02") {
 			load2 = 0
 		}
 		soc, batteryPower, batteryState := sim.batteryTelemetry()
-		publish(client, siteID, model.DevicePV, "pv_01", seq, map[string]float64{"voltage": 18, "current": pvPower / 18, "power": pvPower}, deviceKeys)
+		pvState := "on"
+		if pvPower == 0 {
+			pvState = "off"
+		}
+		publishState(client, siteID, model.DevicePV, "pv_01", seq, pvState, map[string]float64{"voltage": 18, "current": pvPower / 18, "power": pvPower}, deviceKeys)
 		publishState(client, siteID, model.DeviceBattery, "battery_01", seq, batteryState, map[string]float64{"voltage": 12.4, "current": batteryPower / 12.4, "power": batteryPower, "soc": soc, "temperature": 25}, deviceKeys)
 		sim.publishBatterySOCEvent(seq, soc)
-		publish(client, siteID, model.DeviceLoad, "load_01", seq, map[string]float64{"voltage": 12, "current": load1 / 12, "power": load1}, deviceKeys)
-		publish(client, siteID, model.DeviceLoad, "load_02", seq, map[string]float64{"voltage": 12, "current": load2 / 12, "power": load2}, deviceKeys)
+		load1State := "on"
+		if !sim.relayOn("load_01") {
+			load1State = "off"
+		}
+		publishState(client, siteID, model.DeviceLoad, "load_01", seq, load1State, map[string]float64{"voltage": 12, "current": load1 / 12, "power": load1}, deviceKeys)
+		load2State := "on"
+		if !sim.relayOn("load_02") {
+			load2State = "off"
+		}
+		publishState(client, siteID, model.DeviceLoad, "load_02", seq, load2State, map[string]float64{"voltage": 12, "current": load2 / 12, "power": load2}, deviceKeys)
 		log.Printf("published seq=%d pv=%.1f load=%.1f soc=%.2f battery=%s", seq, pvPower, load1+load2, soc, batteryState)
 	}
-}
-
-func publish(client paho.Client, siteID string, typ model.DeviceType, id string, seq int64, metrics map[string]float64, keys deviceauth.Keys) {
-	publishState(client, siteID, typ, id, seq, "online", metrics, keys)
 }
 
 func publishState(client paho.Client, siteID string, typ model.DeviceType, id string, seq int64, state string, metrics map[string]float64, keys deviceauth.Keys) {
@@ -170,10 +181,10 @@ func (s *simulator) batteryTelemetry() (float64, float64, string) {
 	defer s.mu.Unlock()
 	power := 0.0
 	switch s.batteryMode {
-	case "charge":
+	case "charging":
 		power = -15
 		s.soc += 0.005
-	case "discharge":
+	case "discharging":
 		power = 15
 		s.soc -= 0.005
 	default:
@@ -265,9 +276,9 @@ func (s *simulator) handleCommand(_ paho.Client, msg paho.Message) {
 			ack.Error = "set_mode requires battery device and string params.mode"
 			break
 		}
-		if mode != "charge" && mode != "discharge" && mode != "idle" {
+		if mode != "charging" && mode != "discharging" && mode != "idle" {
 			ack.OK = false
-			ack.Error = "unsupported battery mode"
+			ack.Error = "unsupported battery mode (use idle/charging/discharging)"
 			break
 		}
 		s.batteryMode = mode

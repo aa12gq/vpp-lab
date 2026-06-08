@@ -25,6 +25,9 @@ func TestBuildPreviewCreatesCandidateForBatterySlot(t *testing.T) {
 	if preview.CandidateCommand.Action != "set_mode" {
 		t.Fatalf("unexpected action: %s", preview.CandidateCommand.Action)
 	}
+	if preview.CandidateCommand.Params["mode"] != "discharging" {
+		t.Fatalf("unexpected mode: %v", preview.CandidateCommand.Params["mode"])
+	}
 	if preview.SafeToApply {
 		t.Fatal("preview must not be safe to apply by default")
 	}

@@ -57,7 +57,7 @@ vpp/{site_id}/{device_type}/{device_id}/event
 当前动作：
 
 - `set_relay`: 控制负载开关
-- `set_mode`: 控制电池模式，`charge` / `discharge` / `idle`
+- `set_mode`: 控制电池模式，`charging` / `discharging` / `idle`
 
 ## 命令回执
 

@@ -485,9 +485,9 @@
       }
       if (row.device.type === "battery") {
         return `
-          <button class="mini-btn primary" type="button" data-command="${id}" data-action="set_mode" data-mode="charge">CHG</button>
+          <button class="mini-btn primary" type="button" data-command="${id}" data-action="set_mode" data-mode="charging">CHG</button>
           <button class="mini-btn" type="button" data-command="${id}" data-action="set_mode" data-mode="idle">IDLE</button>
-          <button class="mini-btn danger" type="button" data-command="${id}" data-action="set_mode" data-mode="discharge">DIS</button>`;
+          <button class="mini-btn danger" type="button" data-command="${id}" data-action="set_mode" data-mode="discharging">DIS</button>`;
       }
       return `<span class="pill">monitor</span>`;
     }

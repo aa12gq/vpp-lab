@@ -63,11 +63,17 @@ func BuildPreview(now time.Time, summary model.SiteSummary, devices []model.Devi
 	}
 
 	preview.CandidateDeviceID = battery.ID
+	mode := batteryCommandMode(slot.BatteryMode)
+	if mode == "" {
+		preview.Reason = "active slot has unsupported battery mode"
+		return preview
+	}
+
 	preview.CandidateCommand = &model.Command{
 		CommandID: fmt.Sprintf("%s-preview-%d", battery.ID, now.UnixNano()),
 		Action:    "set_mode",
 		Params: map[string]interface{}{
-			"mode":           slot.BatteryMode,
+			"mode":           mode,
 			"target_power_w": slot.TargetPowerW,
 		},
 		IssuedAt: now.Unix(),
@@ -107,6 +113,19 @@ func firstDevice(devices []model.Device, siteID string, typ model.DeviceType) (m
 		}
 	}
 	return model.Device{}, false
+}
+
+func batteryCommandMode(planMode string) string {
+	switch planMode {
+	case "charge":
+		return "charging"
+	case "discharge":
+		return "discharging"
+	case "idle":
+		return "idle"
+	default:
+		return ""
+	}
 }
 
 func round2(v float64) float64 {

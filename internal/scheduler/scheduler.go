@@ -78,12 +78,17 @@ func (s *Scheduler) Tick(ctx context.Context) {
 	}
 
 	if summary.NetPowerW > 10 {
+		dispatched := false
 		for _, b := range batteries {
 			soc := telemetry[b.ID].Metrics["soc"]
 			if soc > s.policy.BatteryMinSOC {
-				s.publish(ctx, b, "set_mode", "load deficit: discharge battery", map[string]interface{}{"mode": "discharging"})
-				return
+				if s.publish(ctx, b, "set_mode", "load deficit: discharge battery", map[string]interface{}{"mode": "discharging"}) {
+					dispatched = true
+				}
 			}
+		}
+		if dispatched {
+			return
 		}
 	}
 
@@ -105,10 +110,10 @@ func (s *Scheduler) SetPolicy(p model.Policy) {
 	s.policy = p
 }
 
-func (s *Scheduler) publish(_ context.Context, d model.Device, action, reason string, params map[string]interface{}) {
+func (s *Scheduler) publish(_ context.Context, d model.Device, action, reason string, params map[string]interface{}) bool {
 	key := commandKey(d.ID, action, params)
 	if last, ok := s.lastSent[key]; ok && time.Since(last) < s.cooldown {
-		return
+		return false
 	}
 	cmd := model.Command{
 		CommandID: fmt.Sprintf("%s-%d", d.ID, time.Now().UnixNano()),
@@ -119,10 +124,11 @@ func (s *Scheduler) publish(_ context.Context, d model.Device, action, reason st
 	}
 	if err := s.commander.PublishCommand(s.siteID, d, cmd); err != nil {
 		log.Printf("publish command failed device=%s action=%s err=%v", d.ID, action, err)
-		return
+		return false
 	}
 	s.lastSent[key] = time.Now()
 	log.Printf("scheduler command device=%s action=%s reason=%q", d.ID, action, reason)
+	return true
 }
 
 func commandKey(deviceID, action string, params map[string]interface{}) string {
