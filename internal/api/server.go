@@ -179,13 +179,13 @@ func (s *Server) upsertDevice(w http.ResponseWriter, r *http.Request) {
 	if d.Name == "" {
 		d.Name = d.ID
 	}
-	s.store.UpsertDevice(d)
 	if s.devices != nil {
 		if err := s.devices.Upsert(r.Context(), d); err != nil {
 			writeError(w, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
+	s.store.UpsertDevice(d)
 	writeJSON(w, http.StatusOK, d)
 }
 
@@ -266,7 +266,7 @@ func (s *Server) applyDispatch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusPreconditionFailed, decision)
 		return
 	}
-	d, ok := s.store.Device(preview.CandidateDeviceID)
+	d, ok := s.store.DeviceInSite(siteID, preview.CandidateDeviceID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "candidate device not found")
 		return
@@ -320,6 +320,10 @@ func (s *Server) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	var p model.Policy
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := scheduler.ValidatePolicy(p); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

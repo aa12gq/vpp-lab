@@ -41,7 +41,7 @@ func RenderPrometheus(s Snapshot) string {
 	writeHelp(&b, "vpp_device_metric", "Latest device telemetry metric.")
 	writeType(&b, "vpp_device_metric", "gauge")
 	for _, d := range sortedDevices(s.Devices) {
-		tele, ok := s.Telemetry[d.ID]
+		tele, ok := telemetryForDevice(s.Telemetry, d)
 		online := 0.0
 		if ok && s.GeneratedAt.Sub(time.Unix(tele.Timestamp, 0)) <= DeviceOnlineTTL {
 			online = 1
@@ -100,6 +100,18 @@ func renderLabels(labels map[string]string) string {
 		parts = append(parts, fmt.Sprintf(`%s="%s"`, k, escapeLabel(labels[k])))
 	}
 	return strings.Join(parts, ",")
+}
+
+func telemetryForDevice(telemetry map[string]model.Telemetry, d model.Device) (model.Telemetry, bool) {
+	if tele, ok := telemetry[telemetryKey(d.SiteID, d.ID)]; ok {
+		return tele, true
+	}
+	tele, ok := telemetry[d.ID]
+	return tele, ok
+}
+
+func telemetryKey(siteID, deviceID string) string {
+	return siteID + "\x00" + deviceID
 }
 
 func escapeLabel(v string) string {

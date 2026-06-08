@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -80,4 +81,37 @@ func TestSchedulerDischargesBatteryBeforeLoadShed(t *testing.T) {
 	if fake.devices[0].ID != "battery_01" || fake.commands[0].Action != "set_mode" || fake.commands[0].Params["mode"] != "discharging" {
 		t.Fatalf("unexpected command device=%+v command=%+v", fake.devices[0], fake.commands[0])
 	}
+}
+
+func TestValidatePolicyRejectsInvalidValues(t *testing.T) {
+	tests := []model.Policy{
+		{BatteryMinSOC: -0.1, BatteryMaxSOC: 0.9, LoadShedThreshold: 80},
+		{BatteryMinSOC: 0.2, BatteryMaxSOC: 1.1, LoadShedThreshold: 80},
+		{BatteryMinSOC: 0.9, BatteryMaxSOC: 0.2, LoadShedThreshold: 80},
+		{BatteryMinSOC: 0.2, BatteryMaxSOC: 0.9, LoadShedThreshold: -1},
+	}
+	for _, tt := range tests {
+		if err := ValidatePolicy(tt); err == nil {
+			t.Fatalf("expected invalid policy: %+v", tt)
+		}
+	}
+}
+
+func TestSchedulerPolicyConcurrentAccess(t *testing.T) {
+	store := state.NewStore()
+	s := New("home-lab", store, &fakeCommander{}, model.Policy{BatteryMinSOC: 0.2, BatteryMaxSOC: 0.9, LoadShedThreshold: 80})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			s.SetPolicy(model.Policy{BatteryMinSOC: 0.1, BatteryMaxSOC: 0.9, LoadShedThreshold: float64(80 + i)})
+		}(i)
+		go func() {
+			defer wg.Done()
+			_ = s.Policy()
+		}()
+	}
+	wg.Wait()
 }

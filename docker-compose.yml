@@ -106,6 +106,7 @@ services:
     env_file:
       - .env
     environment:
+      HTTP_ADDR: :8080
       MQTT_BROKER: tcp://emqx:1883
       INFLUX_URL: http://influxdb:8086
       POSTGRES_DSN: postgres://vpp:vpp@postgres:5432/vpp?sslmode=disable
@@ -118,7 +119,7 @@ services:
       MQTT_TLS_KEY_FILE: ${MQTT_TLS_KEY_FILE:-}
       MQTT_TLS_INSECURE_SKIP_VERIFY: ${MQTT_TLS_INSECURE_SKIP_VERIFY:-false}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:8080/healthz >/dev/null"]

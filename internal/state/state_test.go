@@ -48,3 +48,40 @@ func TestDeviceStatesReportsOnlineAndStaleDevices(t *testing.T) {
 		t.Fatalf("remote site device leaked into home-lab states")
 	}
 }
+
+func TestStoreSeparatesTelemetryForSameDeviceIDAcrossSites(t *testing.T) {
+	now := time.Now().Unix()
+	store := NewStore()
+	store.UpsertDevice(model.Device{ID: "battery_01", SiteID: "home-lab", Type: model.DeviceBattery})
+	store.UpsertDevice(model.Device{ID: "battery_01", SiteID: "remote-lab", Type: model.DeviceBattery})
+	store.PutTelemetry(model.Telemetry{
+		SiteID:    "home-lab",
+		DeviceID:  "battery_01",
+		Timestamp: now,
+		Metrics:   map[string]float64{"power": 10, "soc": 0.4},
+	})
+	store.PutTelemetry(model.Telemetry{
+		SiteID:    "remote-lab",
+		DeviceID:  "battery_01",
+		Timestamp: now,
+		Metrics:   map[string]float64{"power": 20, "soc": 0.8},
+	})
+
+	home := store.Summary("home-lab")
+	remote := store.Summary("remote-lab")
+	if home.BatteryPower != 10 || home.AvgSOC != 0.4 {
+		t.Fatalf("unexpected home summary: %+v", home)
+	}
+	if remote.BatteryPower != 20 || remote.AvgSOC != 0.8 {
+		t.Fatalf("unexpected remote summary: %+v", remote)
+	}
+	if tele := store.TelemetryForSite("home-lab")["battery_01"]; tele.Metrics["soc"] != 0.4 {
+		t.Fatalf("unexpected home telemetry: %+v", tele)
+	}
+	if _, ok := store.Device("battery_01"); ok {
+		t.Fatalf("ambiguous device lookup should fail without site")
+	}
+	if d, ok := store.DeviceInSite("remote-lab", "battery_01"); !ok || d.SiteID != "remote-lab" {
+		t.Fatalf("site scoped lookup failed: %+v ok=%v", d, ok)
+	}
+}

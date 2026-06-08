@@ -37,15 +37,18 @@ func (r *DeviceRepository) Ping(ctx context.Context) error {
 func (r *DeviceRepository) migrate(ctx context.Context) error {
 	_, err := r.pool.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS devices (
-	id TEXT PRIMARY KEY,
+	id TEXT NOT NULL,
 	site_id TEXT NOT NULL,
 	type TEXT NOT NULL,
 	name TEXT NOT NULL,
 	rated_power_w DOUBLE PRECISION NOT NULL DEFAULT 0,
 	capacity_wh DOUBLE PRECISION NOT NULL DEFAULT 0,
 	critical_load BOOLEAN NOT NULL DEFAULT FALSE,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+	PRIMARY KEY (site_id, id)
 );
+ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_pkey;
+ALTER TABLE devices ADD PRIMARY KEY (site_id, id);
 CREATE TABLE IF NOT EXISTS command_records (
 	command_id TEXT PRIMARY KEY,
 	site_id TEXT NOT NULL,
@@ -103,8 +106,7 @@ func (r *DeviceRepository) Upsert(ctx context.Context, d model.Device) error {
 	_, err := r.pool.Exec(ctx, `
 INSERT INTO devices (id, site_id, type, name, rated_power_w, capacity_wh, critical_load, created_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-ON CONFLICT (id) DO UPDATE SET
-	site_id = EXCLUDED.site_id,
+ON CONFLICT (site_id, id) DO UPDATE SET
 	type = EXCLUDED.type,
 	name = EXCLUDED.name,
 	rated_power_w = EXCLUDED.rated_power_w,

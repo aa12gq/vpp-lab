@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,6 +30,12 @@ func (f *fakeAuditRecorder) ListAuditLogs(context.Context, int) ([]model.AuditLo
 	out := make([]model.AuditLog, len(f.logs))
 	copy(out, f.logs)
 	return out, nil
+}
+
+type failingDeviceSaver struct{}
+
+func (failingDeviceSaver) Upsert(context.Context, model.Device) error {
+	return errors.New("persist failed")
 }
 
 func TestControlTokenProtectsCommandEndpoint(t *testing.T) {
@@ -108,5 +115,38 @@ func TestAuditRecordsControlRequests(t *testing.T) {
 	}
 	if audit.logs[1].Actor != "lab-user" {
 		t.Fatalf("unexpected actor: %+v", audit.logs[1])
+	}
+}
+
+func TestUpsertDeviceDoesNotMutateStoreWhenPersistenceFails(t *testing.T) {
+	store := state.NewStore()
+	sch := scheduler.New("home-lab", store, fakePublisher{}, model.Policy{})
+	handler := New("home-lab", store, sch, fakePublisher{}, failingDeviceSaver{}).Handler()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices", bytes.NewReader([]byte(`{"id":"load_99","type":"load","name":"Bad Save"}`)))
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if _, ok := store.Device("load_99"); ok {
+		t.Fatalf("device should not be in memory after persistence failure")
+	}
+}
+
+func TestSetPolicyRejectsInvalidPolicy(t *testing.T) {
+	store := state.NewStore()
+	sch := scheduler.New("home-lab", store, fakePublisher{}, model.Policy{BatteryMinSOC: 0.2, BatteryMaxSOC: 0.9, LoadShedThreshold: 80})
+	handler := New("home-lab", store, sch, fakePublisher{}, nil).WithControlToken("secret").Handler()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/policies/default", bytes.NewReader([]byte(`{"battery_min_soc":0.95,"battery_max_soc":0.2,"load_shed_threshold_w":80}`)))
+	req.Header.Set("X-VPP-Control-Token", "secret")
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := sch.Policy(); got.BatteryMinSOC != 0.2 || got.BatteryMaxSOC != 0.9 || got.LoadShedThreshold != 80 {
+		t.Fatalf("policy should remain unchanged: %+v", got)
 	}
 }

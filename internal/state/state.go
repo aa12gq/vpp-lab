@@ -21,6 +21,7 @@ type Store struct {
 	commands  []model.CommandRecord
 	events    []model.DeviceEvent
 	redis     *redis.Client
+	siteID    string
 	redisKey  string
 }
 
@@ -48,6 +49,7 @@ func NewRedisStore(ctx context.Context, siteID string, opts RedisOptions) (*Stor
 		return nil, err
 	}
 	store.redis = client
+	store.siteID = siteID
 	store.redisKey = telemetryKey(siteID)
 	if err := store.loadTelemetry(ctx); err != nil {
 		_ = client.Close()
@@ -82,7 +84,7 @@ func (s *Store) UpsertDevice(d model.Device) {
 	if d.CreatedAt.IsZero() {
 		d.CreatedAt = time.Now()
 	}
-	s.devices[d.ID] = d
+	s.devices[stateKey(d.SiteID, d.ID)] = d
 }
 
 func (s *Store) Devices() []model.Device {
@@ -98,13 +100,27 @@ func (s *Store) Devices() []model.Device {
 func (s *Store) Device(id string) (model.Device, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	d, ok := s.devices[id]
+	d, ok := s.deviceByIDLocked(id)
+	return d, ok
+}
+
+func (s *Store) DeviceInSite(siteID, id string) (model.Device, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	d, ok := s.devices[stateKey(siteID, id)]
 	return d, ok
 }
 
 func (s *Store) PutTelemetry(t model.Telemetry) {
 	s.mu.Lock()
-	s.telemetry[t.DeviceID] = t
+	if t.SiteID == "" {
+		if d, ok := s.deviceByIDLocked(t.DeviceID); ok {
+			t.SiteID = d.SiteID
+		} else if s.siteID != "" {
+			t.SiteID = s.siteID
+		}
+	}
+	s.telemetry[stateKey(t.SiteID, t.DeviceID)] = t
 	s.mu.Unlock()
 	s.persistTelemetry(t)
 }
@@ -119,6 +135,18 @@ func (s *Store) Telemetry() map[string]model.Telemetry {
 	return out
 }
 
+func (s *Store) TelemetryForSite(siteID string) map[string]model.Telemetry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]model.Telemetry)
+	for _, t := range s.telemetry {
+		if t.SiteID == siteID {
+			out[t.DeviceID] = t
+		}
+	}
+	return out
+}
+
 func (s *Store) Summary(siteID string) model.SiteSummary {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -126,8 +154,8 @@ func (s *Store) Summary(siteID string) model.SiteSummary {
 	summary.SiteID = siteID
 	var socSum float64
 	var socCount int
-	for id, t := range s.telemetry {
-		d, ok := s.devices[id]
+	for _, t := range s.telemetry {
+		d, ok := s.devices[stateKey(t.SiteID, t.DeviceID)]
 		if !ok || d.SiteID != siteID {
 			continue
 		}
@@ -164,7 +192,7 @@ func (s *Store) DeviceStates(siteID string, now time.Time, onlineTTL time.Durati
 			continue
 		}
 		state := model.DeviceRuntimeState{Device: d}
-		if tele, ok := s.telemetry[d.ID]; ok {
+		if tele, ok := s.telemetry[stateKey(siteID, d.ID)]; ok {
 			teleCopy := tele
 			state.Telemetry = &teleCopy
 			state.LastSeenAt = time.Unix(tele.Timestamp, 0)
@@ -280,7 +308,10 @@ func (s *Store) loadTelemetry(ctx context.Context) error {
 		if t.DeviceID == "" {
 			t.DeviceID = deviceID
 		}
-		s.telemetry[t.DeviceID] = t
+		if t.SiteID == "" {
+			t.SiteID = s.siteID
+		}
+		s.telemetry[stateKey(t.SiteID, t.DeviceID)] = t
 	}
 	return nil
 }
@@ -296,11 +327,30 @@ func (s *Store) persistTelemetry(t model.Telemetry) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if err := s.redis.HSet(ctx, s.redisKey, t.DeviceID, payload).Err(); err != nil {
+	if err := s.redis.HSet(ctx, s.redisKey, stateKey(t.SiteID, t.DeviceID), payload).Err(); err != nil {
 		log.Printf("persist redis telemetry failed device=%s err=%v", t.DeviceID, err)
 	}
 }
 
 func telemetryKey(siteID string) string {
 	return fmt.Sprintf("vpp:%s:latest_telemetry", siteID)
+}
+
+func stateKey(siteID, id string) string {
+	return siteID + "\x00" + id
+}
+
+func (s *Store) deviceByIDLocked(id string) (model.Device, bool) {
+	var found model.Device
+	matches := 0
+	for _, d := range s.devices {
+		if d.ID == id {
+			found = d
+			matches++
+		}
+	}
+	if matches != 1 {
+		return model.Device{}, false
+	}
+	return found, true
 }

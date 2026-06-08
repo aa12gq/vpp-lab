@@ -36,7 +36,7 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		HTTPAddr:          getenv("HTTP_ADDR", ":8080"),
+		HTTPAddr:          getenv("HTTP_ADDR", "127.0.0.1:8080"),
 		SiteID:            getenv("SITE_ID", "home-lab"),
 		MQTTBroker:        getenv("MQTT_BROKER", "tcp://localhost:1883"),
 		MQTTClientID:      getenv("MQTT_CLIENT_ID", "vpp-platform"),
