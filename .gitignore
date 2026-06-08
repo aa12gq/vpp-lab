@@ -8,5 +8,9 @@ dist/
 *.log
 .DS_Store
 
+# Local runtime/database archives. May contain credentials, audit logs, IPs, and telemetry.
+ARCHIVE_SUMMARY.md
+archive_*
+
 # PlatformIO build artifacts
 firmware/**/.pio/
