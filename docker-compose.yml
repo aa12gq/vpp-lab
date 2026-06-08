@@ -188,7 +188,7 @@ services:
       EDGE_CAPTURE_KINDS: telemetry,event,status,command/ack
       EDGE_UPSTREAM_TOPIC_PREFIX: ${EDGE_UPSTREAM_TOPIC_PREFIX:-}
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     volumes:
       - ./data/edge-gateway:/data
     restart: on-failure

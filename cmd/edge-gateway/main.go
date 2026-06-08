@@ -34,7 +34,7 @@ func main() {
 	flushInterval := getdur("EDGE_FLUSH_INTERVAL", 5*time.Second)
 	cacheRetention := getdur("EDGE_CACHE_RETENTION", 24*time.Hour)
 	cleanupInterval := getdur("EDGE_CLEANUP_INTERVAL", time.Hour)
-	httpAddr := getenv("EDGE_HTTP_ADDR", ":8081")
+	httpAddr := getenv("EDGE_HTTP_ADDR", "127.0.0.1:8081")
 	controlToken := strings.TrimSpace(getenv("EDGE_CONTROL_TOKEN", ""))
 	captureKinds := parseKindSet(getenv("EDGE_CAPTURE_KINDS", "telemetry,event,status,command/ack"))
 	upstreamTopicPrefix := strings.Trim(getenv("EDGE_UPSTREAM_TOPIC_PREFIX", ""), "/")
@@ -312,7 +312,7 @@ func decodeLocalCommand(r *http.Request) (localCommandRequest, error) {
 func edgeAuthorized(r *http.Request, token string) bool {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return true
+		return false
 	}
 	got := strings.TrimSpace(r.Header.Get("X-VPP-Edge-Token"))
 	if got == "" {

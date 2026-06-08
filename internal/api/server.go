@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/audit-logs", s.auditLogs)
 	mux.HandleFunc("GET /api/v1/policies/default", s.getPolicy)
 	mux.HandleFunc("PUT /api/v1/policies/default", s.setPolicy)
+	mux.HandleFunc("POST /api/v1/sites/{site_id}/devices/{device_id}/command", s.command)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", s.command)
 	return withJSON(s.withAudit(mux))
 }
@@ -223,6 +224,10 @@ func (s *Server) customPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := optimizer.ValidateConfig(cfg); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, optimizer.BuildDayAheadPlan(time.Now(), s.store.Summary(siteID), cfg))
 }
 
@@ -244,6 +249,10 @@ func (s *Server) customDispatchPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := optimizer.ValidateConfig(cfg); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, dispatch.BuildPreview(time.Now(), s.store.Summary(siteID), s.store.Devices(), cfg))
 }
 
@@ -258,6 +267,14 @@ func (s *Server) applyDispatch(w http.ResponseWriter, r *http.Request) {
 	var req dispatch.ApplyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := optimizer.ValidateConfig(req.Config); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.MaxAbsTrackingErrorW < 0 {
+		writeError(w, http.StatusBadRequest, "max_abs_tracking_error_w must be >= 0")
 		return
 	}
 	preview := dispatch.BuildPreview(time.Now(), s.store.Summary(siteID), s.store.Devices(), req.Config)
@@ -336,7 +353,11 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	deviceID := r.PathValue("device_id")
-	d, ok := s.store.Device(deviceID)
+	siteID := r.PathValue("site_id")
+	if siteID == "" {
+		siteID = s.siteID
+	}
+	d, ok := s.store.DeviceInSite(siteID, deviceID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "device not found")
 		return
@@ -352,7 +373,7 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 	}
 	cmd.CommandID = deviceID + "-" + time.Now().Format("20060102150405.000000000")
 	cmd.IssuedAt = time.Now().Unix()
-	if err := s.publisher.PublishCommand(d.SiteID, d, cmd); err != nil {
+	if err := s.publisher.PublishCommand(siteID, d, cmd); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -420,6 +441,8 @@ func auditAction(r *http.Request) (string, bool) {
 	case r.Method == http.MethodPut && path == "/api/v1/policies/default":
 		return "policy.update", true
 	case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/devices/") && strings.HasSuffix(path, "/command"):
+		return "command.issue", true
+	case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/sites/") && strings.Contains(path, "/devices/") && strings.HasSuffix(path, "/command"):
 		return "command.issue", true
 	case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/sites/") && strings.HasSuffix(path, "/dispatch/apply"):
 		return "dispatch.apply", true

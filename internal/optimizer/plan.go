@@ -1,6 +1,7 @@
 package optimizer
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -142,6 +143,46 @@ func BuildDayAheadPlan(now time.Time, summary model.SiteSummary, cfg Config) Pla
 		})
 	}
 	return plan
+}
+
+func ValidateConfig(cfg Config) error {
+	cfg = normalizeConfig(cfg)
+	if cfg.HorizonHours <= 0 {
+		return fmt.Errorf("horizon_hours must be > 0")
+	}
+	if cfg.SlotMinutes <= 0 {
+		return fmt.Errorf("slot_minutes must be > 0")
+	}
+	if 60%cfg.SlotMinutes != 0 {
+		return fmt.Errorf("slot_minutes must divide 60")
+	}
+	if cfg.BatteryCapacityWh <= 0 {
+		return fmt.Errorf("battery_capacity_wh must be > 0")
+	}
+	if cfg.BatteryPowerLimitW <= 0 {
+		return fmt.Errorf("battery_power_limit_w must be > 0")
+	}
+	if cfg.MinSOC < 0 || cfg.MinSOC > 1 {
+		return fmt.Errorf("min_soc must be between 0 and 1")
+	}
+	if cfg.MaxSOC < 0 || cfg.MaxSOC > 1 {
+		return fmt.Errorf("max_soc must be between 0 and 1")
+	}
+	if cfg.MinSOC > cfg.MaxSOC {
+		return fmt.Errorf("min_soc must be <= max_soc")
+	}
+	for i, band := range cfg.Tariffs {
+		if band.StartHour < 0 || band.StartHour > 24 || band.EndHour < 0 || band.EndHour > 24 {
+			return fmt.Errorf("tariffs[%d] hours must be between 0 and 24", i)
+		}
+		if band.StartHour >= band.EndHour {
+			return fmt.Errorf("tariffs[%d] start_hour must be < end_hour", i)
+		}
+		if band.Price < 0 {
+			return fmt.Errorf("tariffs[%d] price must be >= 0", i)
+		}
+	}
+	return nil
 }
 
 func normalizeConfig(cfg Config) Config {

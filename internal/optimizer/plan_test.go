@@ -77,3 +77,25 @@ func TestSingleTariffDoesNotTriggerArbitrage(t *testing.T) {
 		t.Fatalf("single tariff should not trigger arbitrage: %+v", plan.Slots[0])
 	}
 }
+
+func TestValidateConfigRejectsInvalidValues(t *testing.T) {
+	tests := []Config{
+		{SlotMinutes: -15},
+		{SlotMinutes: 7},
+		{BatteryCapacityWh: -1},
+		{BatteryPowerLimitW: -1},
+		{MinSOC: 0.8, MaxSOC: 0.2},
+		{Tariffs: []TariffBand{{Name: "bad", StartHour: 18, EndHour: 7, Price: 0.5}}},
+	}
+	for _, cfg := range tests {
+		if err := ValidateConfig(cfg); err == nil {
+			t.Fatalf("expected invalid config to fail: %+v", cfg)
+		}
+	}
+}
+
+func TestValidateConfigAcceptsDefaultableZeroConfig(t *testing.T) {
+	if err := ValidateConfig(Config{}); err != nil {
+		t.Fatalf("defaultable zero config should be valid: %v", err)
+	}
+}

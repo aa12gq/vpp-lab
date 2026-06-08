@@ -17,6 +17,19 @@ type fakePublisher struct{}
 
 func (fakePublisher) PublishCommand(string, model.Device, model.Command) error { return nil }
 
+type recordingPublisher struct {
+	siteID string
+	device model.Device
+	cmd    model.Command
+}
+
+func (p *recordingPublisher) PublishCommand(siteID string, d model.Device, cmd model.Command) error {
+	p.siteID = siteID
+	p.device = d
+	p.cmd = cmd
+	return nil
+}
+
 type fakeAuditRecorder struct {
 	logs []model.AuditLog
 }
@@ -73,6 +86,44 @@ func TestControlTokenAcceptsBearerHeader(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("expected accepted with bearer token, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSiteCommandRouteUsesSiteScopedDevice(t *testing.T) {
+	store := state.NewStore()
+	store.UpsertDevice(model.Device{ID: "load_01", SiteID: "home-lab", Type: model.DeviceLoad})
+	store.UpsertDevice(model.Device{ID: "load_01", SiteID: "remote-lab", Type: model.DeviceLoad})
+	pub := &recordingPublisher{}
+	sch := scheduler.New("home-lab", store, pub, model.Policy{})
+	handler := New("home-lab", store, sch, pub, nil).Handler()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sites/remote-lab/devices/load_01/command", bytes.NewReader([]byte(`{"action":"set_relay","params":{"on":false}}`)))
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected accepted, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if pub.siteID != "remote-lab" || pub.device.SiteID != "remote-lab" {
+		t.Fatalf("command should use remote-lab device, got site=%q device=%+v cmd=%+v", pub.siteID, pub.device, pub.cmd)
+	}
+}
+
+func TestLegacyCommandRouteUsesDefaultSiteWhenDeviceIDIsDuplicated(t *testing.T) {
+	store := state.NewStore()
+	store.UpsertDevice(model.Device{ID: "load_01", SiteID: "home-lab", Type: model.DeviceLoad})
+	store.UpsertDevice(model.Device{ID: "load_01", SiteID: "remote-lab", Type: model.DeviceLoad})
+	pub := &recordingPublisher{}
+	sch := scheduler.New("home-lab", store, pub, model.Policy{})
+	handler := New("home-lab", store, sch, pub, nil).Handler()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/load_01/command", bytes.NewReader([]byte(`{"action":"set_relay","params":{"on":false}}`)))
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected accepted, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if pub.siteID != "home-lab" || pub.device.SiteID != "home-lab" {
+		t.Fatalf("legacy command should use default site, got site=%q device=%+v", pub.siteID, pub.device)
 	}
 }
 
@@ -148,5 +199,32 @@ func TestSetPolicyRejectsInvalidPolicy(t *testing.T) {
 	}
 	if got := sch.Policy(); got.BatteryMinSOC != 0.2 || got.BatteryMaxSOC != 0.9 || got.LoadShedThreshold != 80 {
 		t.Fatalf("policy should remain unchanged: %+v", got)
+	}
+}
+
+func TestCustomPlanRejectsInvalidConfig(t *testing.T) {
+	store := state.NewStore()
+	sch := scheduler.New("home-lab", store, fakePublisher{}, model.Policy{})
+	handler := New("home-lab", store, sch, fakePublisher{}, nil).Handler()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sites/home-lab/plan", bytes.NewReader([]byte(`{"slot_minutes":-15}`)))
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestApplyDispatchRejectsInvalidConfig(t *testing.T) {
+	store := state.NewStore()
+	store.UpsertDevice(model.Device{ID: "battery_01", SiteID: "home-lab", Type: model.DeviceBattery})
+	sch := scheduler.New("home-lab", store, fakePublisher{}, model.Policy{})
+	handler := New("home-lab", store, sch, fakePublisher{}, nil).Handler()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sites/home-lab/dispatch/apply", bytes.NewReader([]byte(`{"confirm":true,"max_abs_tracking_error_w":-1}`)))
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }

@@ -47,8 +47,8 @@ func TestEdgeSubscribeTopics(t *testing.T) {
 
 func TestEdgeAuthorized(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/local-command", nil)
-	if !edgeAuthorized(req, "") {
-		t.Fatalf("empty token should allow local command")
+	if edgeAuthorized(req, "") {
+		t.Fatalf("empty token should reject local command")
 	}
 	if edgeAuthorized(req, "secret") {
 		t.Fatalf("missing token should reject")
