@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -489,7 +490,7 @@ func (s *Server) requireControl(w http.ResponseWriter, r *http.Request) bool {
 	if token == "" {
 		token = bearerToken(r.Header.Get("Authorization"))
 	}
-	if token == s.token {
+	if subtle.ConstantTimeCompare([]byte(token), []byte(s.token)) == 1 {
 		return true
 	}
 	writeError(w, http.StatusUnauthorized, "control token required")

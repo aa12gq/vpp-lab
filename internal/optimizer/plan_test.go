@@ -1,6 +1,7 @@
 package optimizer
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -97,5 +98,27 @@ func TestValidateConfigRejectsInvalidValues(t *testing.T) {
 func TestValidateConfigAcceptsDefaultableZeroConfig(t *testing.T) {
 	if err := ValidateConfig(Config{}); err != nil {
 		t.Fatalf("defaultable zero config should be valid: %v", err)
+	}
+}
+
+func TestValidateConfigPreservesExplicitZeroSOC(t *testing.T) {
+	var cfg Config
+	if err := json.Unmarshal([]byte(`{
+		"horizon_hours":1,
+		"slot_minutes":15,
+		"battery_capacity_wh":150,
+		"battery_power_limit_w":50,
+		"min_soc":0,
+		"max_soc":0,
+		"tariffs":[{"name":"flat","start_hour":0,"end_hour":24,"price":0.58}]
+	}`), &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	if err := ValidateConfig(cfg); err != nil {
+		t.Fatalf("explicit zero SOC bounds should be valid: %v", err)
+	}
+	plan := BuildDayAheadPlan(time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC), model.SiteSummary{SiteID: "home-lab", AvgSOC: 0.5}, cfg)
+	if plan.Config.MinSOC != 0 || plan.Config.MaxSOC != 0 {
+		t.Fatalf("explicit zero SOC bounds should be preserved, got min=%.2f max=%.2f", plan.Config.MinSOC, plan.Config.MaxSOC)
 	}
 }

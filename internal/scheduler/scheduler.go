@@ -39,6 +39,10 @@ func New(siteID string, store *state.Store, commander Commander, policy model.Po
 }
 
 func (s *Scheduler) Run(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		log.Printf("scheduler disabled: interval must be > 0, got %s", interval)
+		return
+	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

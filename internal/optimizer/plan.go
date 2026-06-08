@@ -1,6 +1,7 @@
 package optimizer
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -25,6 +26,8 @@ type Config struct {
 	MinSOC             float64      `json:"min_soc"`
 	MaxSOC             float64      `json:"max_soc"`
 	Tariffs            []TariffBand `json:"tariffs"`
+	minSOCSet          bool
+	maxSOCSet          bool
 }
 
 type Slot struct {
@@ -45,6 +48,28 @@ type Plan struct {
 	SiteID      string    `json:"site_id"`
 	Config      Config    `json:"config"`
 	Slots       []Slot    `json:"slots"`
+}
+
+func (c *Config) UnmarshalJSON(data []byte) error {
+	type configAlias Config
+	var raw struct {
+		*configAlias
+		MinSOC *float64 `json:"min_soc"`
+		MaxSOC *float64 `json:"max_soc"`
+	}
+	raw.configAlias = (*configAlias)(c)
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw.MinSOC != nil {
+		c.MinSOC = *raw.MinSOC
+		c.minSOCSet = true
+	}
+	if raw.MaxSOC != nil {
+		c.MaxSOC = *raw.MaxSOC
+		c.maxSOCSet = true
+	}
+	return nil
 }
 
 func CurrentSlot(plan Plan, at time.Time) (Slot, bool) {
@@ -146,20 +171,19 @@ func BuildDayAheadPlan(now time.Time, summary model.SiteSummary, cfg Config) Pla
 }
 
 func ValidateConfig(cfg Config) error {
-	cfg = normalizeConfig(cfg)
-	if cfg.HorizonHours <= 0 {
+	if cfg.HorizonHours < 0 {
 		return fmt.Errorf("horizon_hours must be > 0")
 	}
-	if cfg.SlotMinutes <= 0 {
+	if cfg.SlotMinutes < 0 {
 		return fmt.Errorf("slot_minutes must be > 0")
 	}
-	if 60%cfg.SlotMinutes != 0 {
+	if cfg.SlotMinutes > 0 && 60%cfg.SlotMinutes != 0 {
 		return fmt.Errorf("slot_minutes must divide 60")
 	}
-	if cfg.BatteryCapacityWh <= 0 {
+	if cfg.BatteryCapacityWh < 0 {
 		return fmt.Errorf("battery_capacity_wh must be > 0")
 	}
-	if cfg.BatteryPowerLimitW <= 0 {
+	if cfg.BatteryPowerLimitW < 0 {
 		return fmt.Errorf("battery_power_limit_w must be > 0")
 	}
 	if cfg.MinSOC < 0 || cfg.MinSOC > 1 {
@@ -171,6 +195,7 @@ func ValidateConfig(cfg Config) error {
 	if cfg.MinSOC > cfg.MaxSOC {
 		return fmt.Errorf("min_soc must be <= max_soc")
 	}
+	normalized := normalizeConfig(cfg)
 	for i, band := range cfg.Tariffs {
 		if band.StartHour < 0 || band.StartHour > 24 || band.EndHour < 0 || band.EndHour > 24 {
 			return fmt.Errorf("tariffs[%d] hours must be between 0 and 24", i)
@@ -181,6 +206,21 @@ func ValidateConfig(cfg Config) error {
 		if band.Price < 0 {
 			return fmt.Errorf("tariffs[%d] price must be >= 0", i)
 		}
+	}
+	if normalized.HorizonHours <= 0 {
+		return fmt.Errorf("horizon_hours must be > 0")
+	}
+	if normalized.SlotMinutes <= 0 {
+		return fmt.Errorf("slot_minutes must be > 0")
+	}
+	if normalized.BatteryCapacityWh <= 0 {
+		return fmt.Errorf("battery_capacity_wh must be > 0")
+	}
+	if normalized.BatteryPowerLimitW <= 0 {
+		return fmt.Errorf("battery_power_limit_w must be > 0")
+	}
+	if normalized.MinSOC > normalized.MaxSOC {
+		return fmt.Errorf("min_soc must be <= max_soc")
 	}
 	return nil
 }
@@ -199,10 +239,10 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.BatteryPowerLimitW == 0 {
 		cfg.BatteryPowerLimitW = def.BatteryPowerLimitW
 	}
-	if cfg.MinSOC == 0 {
+	if cfg.MinSOC == 0 && !cfg.minSOCSet {
 		cfg.MinSOC = def.MinSOC
 	}
-	if cfg.MaxSOC == 0 {
+	if cfg.MaxSOC == 0 && !cfg.maxSOCSet {
 		cfg.MaxSOC = def.MaxSOC
 	}
 	if len(cfg.Tariffs) == 0 {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -318,7 +319,7 @@ func edgeAuthorized(r *http.Request, token string) bool {
 	if got == "" {
 		got = bearerToken(r.Header.Get("Authorization"))
 	}
-	return got == token
+	return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1
 }
 
 func bearerToken(header string) string {

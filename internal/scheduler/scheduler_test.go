@@ -115,3 +115,18 @@ func TestSchedulerPolicyConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestSchedulerRunIgnoresInvalidInterval(t *testing.T) {
+	store := state.NewStore()
+	s := New("home-lab", store, &fakeCommander{}, model.Policy{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.Run(context.Background(), 0)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("scheduler should return immediately for invalid interval")
+	}
+}
